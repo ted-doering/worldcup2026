@@ -123,10 +123,63 @@
   <!-- SCHEDULE -->
   <div id="tab-schedule" class="section active">
     <div class="filter-bar">
-      <button class="filter-btn active" onclick="filterSchedule('all',this)">All matches</button>
-      <button class="filter-btn" onclick="filterSchedule('today',this)">Today (Jun 11)</button>
-      <button class="filter-btn" onclick="filterSchedule('usa',this)">🇺🇸 USA games</button>
+      <button class="filter-btn active" id="btn-all" onclick="filterSchedule('all',this)">All matches</button>
+      <button class="filter-btn" onclick="filterSchedule('today',this)">Today</button>
+      <button class="filter-btn" onclick="filterSchedule('usa',this)">🇺🇸 USA</button>
       <button class="filter-btn" onclick="filterSchedule('fox',this)">FOX / FS1</button>
+    </div>
+    <div style="margin-bottom:1rem;">
+      <select id="team-select" onchange="filterByTeam(this.value)" style="width:100%;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg2);font-size:14px;color:var(--text);outline:none;cursor:pointer;">
+        <option value="">🔍 Filter by team...</option>
+        <option value="Albania">🇦🇱 Albania</option>
+        <option value="Argentina">🇦🇷 Argentina</option>
+        <option value="Australia">🇦🇺 Australia</option>
+        <option value="Belgium">🇧🇪 Belgium</option>
+        <option value="Bosnia-Herzegovina">🇧🇦 Bosnia-Herzegovina</option>
+        <option value="Brazil">🇧🇷 Brazil</option>
+        <option value="Cameroon">🇨🇲 Cameroon</option>
+        <option value="Canada">🇨🇦 Canada</option>
+        <option value="Cape Verde">🇨🇻 Cape Verde</option>
+        <option value="Colombia">🇨🇴 Colombia</option>
+        <option value="Curaçao">🇨🇼 Curaçao</option>
+        <option value="Czechia">🇨🇿 Czechia</option>
+        <option value="DR Congo">🇨🇩 DR Congo</option>
+        <option value="Ecuador">🇪🇨 Ecuador</option>
+        <option value="Egypt">🇪🇬 Egypt</option>
+        <option value="England">🏴󠁧󠁢󠁥󠁮󠁧󠁿 England</option>
+        <option value="France">🇫🇷 France</option>
+        <option value="Germany">🇩🇪 Germany</option>
+        <option value="Haiti">🇭🇹 Haiti</option>
+        <option value="Iran">🇮🇷 Iran</option>
+        <option value="Italy">🇮🇹 Italy</option>
+        <option value="Ivory Coast">🇨🇮 Ivory Coast</option>
+        <option value="Japan">🇯🇵 Japan</option>
+        <option value="Mexico">🇲🇽 Mexico</option>
+        <option value="Morocco">🇲🇦 Morocco</option>
+        <option value="Netherlands">🇳🇱 Netherlands</option>
+        <option value="New Zealand">🇳🇿 New Zealand</option>
+        <option value="Nigeria">🇳🇬 Nigeria</option>
+        <option value="Paraguay">🇵🇾 Paraguay</option>
+        <option value="Peru">🇵🇪 Peru</option>
+        <option value="Poland">🇵🇱 Poland</option>
+        <option value="Portugal">🇵🇹 Portugal</option>
+        <option value="Qatar">🇶🇦 Qatar</option>
+        <option value="Saudi Arabia">🇸🇦 Saudi Arabia</option>
+        <option value="Scotland">🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland</option>
+        <option value="Senegal">🇸🇳 Senegal</option>
+        <option value="Serbia">🇷🇸 Serbia</option>
+        <option value="South Africa">🇿🇦 South Africa</option>
+        <option value="South Korea">🇰🇷 South Korea</option>
+        <option value="Spain">🇪🇸 Spain</option>
+        <option value="Sweden">🇸🇪 Sweden</option>
+        <option value="Switzerland">🇨🇭 Switzerland</option>
+        <option value="Tunisia">🇹🇳 Tunisia</option>
+        <option value="Türkiye">🇹🇷 Türkiye</option>
+        <option value="Ukraine">🇺🇦 Ukraine</option>
+        <option value="United States">🇺🇸 United States</option>
+        <option value="Uzbekistan">🇺🇿 Uzbekistan</option>
+        <option value="Venezuela">🇻🇪 Venezuela</option>
+      </select>
     </div>
     <div id="schedule-list"></div>
   </div>
@@ -194,38 +247,52 @@
 const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
 // ─────────────────────────────────────────────────────────────────────
 
+// Convert an ET kickoff time to the visitor's local time string
+// etHour is 0-23 in ET (UTC-4 in June/July = EDT)
+function localTime(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit', timeZoneName:'short'});
+}
+
+// Returns the local day header string, e.g. "Thu, June 11" — may shift for very late/early games
+function localDay(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleDateString([], {weekday:'short', month:'long', day:'numeric'});
+}
+
+// All times stored as UTC ISO strings (EDT = UTC-4)
 const MATCHES = [
-  {date:'Jun 11',day:'Thu, June 11',group:'A',home:'Mexico 🇲🇽',away:'South Africa 🇿🇦',time:'3pm ET',venue:'Mexico City',channels:['FOX','Telemundo','Tubi'],live:true,usa:false},
-  {date:'Jun 11',day:'Thu, June 11',group:'A',home:'South Korea 🇰🇷',away:'Czechia 🇨🇿',time:'10pm ET',venue:'Guadalajara',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 12',day:'Fri, June 12',group:'B',home:'Canada 🇨🇦',away:'Bosnia-Herzegovina 🇧🇦',time:'3pm ET',venue:'Toronto',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 12',day:'Fri, June 12',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',time:'9pm ET',venue:'Los Angeles',channels:['FOX','Telemundo','Tubi'],live:false,usa:true},
-  {date:'Jun 13',day:'Sat, June 13',group:'B',home:'Qatar 🇶🇦',away:'Switzerland 🇨🇭',time:'3pm ET',venue:'New York/NJ',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 13',day:'Sat, June 13',group:'C',home:'Brazil 🇧🇷',away:'Morocco 🇲🇦',time:'6pm ET',venue:'Dallas',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 13',day:'Sat, June 13',group:'C',home:'Haiti 🇭🇹',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',time:'9pm ET',venue:'Philadelphia',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 14',day:'Sun, June 14',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',time:'12am ET',venue:'Seattle',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 14',day:'Sun, June 14',group:'E',home:'Germany 🇩🇪',away:'Curaçao 🇨🇼',time:'1pm ET',venue:'Houston',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 14',day:'Sun, June 14',group:'F',home:'Netherlands 🇳🇱',away:'Japan 🇯🇵',time:'4pm ET',venue:'Arlington, TX',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 14',day:'Sun, June 14',group:'E',home:'Ivory Coast 🇨🇮',away:'Ecuador 🇪🇨',time:'7pm ET',venue:'Philadelphia',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 14',day:'Sun, June 14',group:'F',home:'Sweden 🇸🇪',away:'Tunisia 🇹🇳',time:'10pm ET',venue:'Guadalajara',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 15',day:'Mon, June 15',group:'H',home:'Spain 🇪🇸',away:'Cape Verde 🇨🇻',time:'12pm ET',venue:'Atlanta',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 15',day:'Mon, June 15',group:'G',home:'Belgium 🇧🇪',away:'Egypt 🇪🇬',time:'3pm ET',venue:'Miami',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 15',day:'Mon, June 15',group:'H',home:'Argentina 🇦🇷',away:'Albania 🇦🇱',time:'6pm ET',venue:'Houston',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 15',day:'Mon, June 15',group:'G',home:'Iran 🇮🇷',away:'New Zealand 🇳🇿',time:'9pm ET',venue:'Kansas City',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 16',day:'Tue, June 16',group:'I',home:'France 🇫🇷',away:'Saudi Arabia 🇸🇦',time:'12pm ET',venue:'Los Angeles',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 16',day:'Tue, June 16',group:'J',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Nigeria 🇳🇬',time:'3pm ET',venue:'Dallas',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 16',day:'Tue, June 16',group:'I',home:'Ukraine 🇺🇦',away:'Cameroon 🇨🇲',time:'6pm ET',venue:'Boston',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 16',day:'Tue, June 16',group:'J',home:'Senegal 🇸🇳',away:'Serbia 🇷🇸',time:'9pm ET',venue:'Seattle',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 17',day:'Wed, June 17',group:'L',home:'Portugal 🇵🇹',away:'DR Congo 🇨🇩',time:'12pm ET',venue:'Boston',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 17',day:'Wed, June 17',group:'K',home:'Poland 🇵🇱',away:'Peru 🇵🇪',time:'3pm ET',venue:'New York/NJ',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 17',day:'Wed, June 17',group:'L',home:'Uzbekistan 🇺🇿',away:'Colombia 🇨🇴',time:'6pm ET',venue:'Miami',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 17',day:'Wed, June 17',group:'K',home:'Venezuela 🇻🇪',away:'Italy 🇮🇹',time:'9pm ET',venue:'Monterrey',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 18',day:'Thu, June 18',group:'A',home:'South Africa 🇿🇦',away:'Czechia 🇨🇿',time:'12pm ET',venue:'Atlanta',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 18',day:'Thu, June 18',group:'B',home:'Switzerland 🇨🇭',away:'Bosnia-Herzegovina 🇧🇦',time:'3pm ET',venue:'Vancouver',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jun 18',day:'Thu, June 18',group:'A',home:'Mexico 🇲🇽',away:'South Korea 🇰🇷',time:'9pm ET',venue:'Guadalajara',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 19',day:'Fri, June 19',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Brazil 🇧🇷',time:'12pm ET',venue:'San Francisco',channels:['FOX','Telemundo'],live:false,usa:false},
-  {date:'Jun 19',day:'Fri, June 19',group:'D',home:'United States 🇺🇸',away:'Australia 🇦🇺',time:'3pm ET',venue:'Seattle',channels:['FOX','Telemundo'],live:false,usa:true},
-  {date:'Jun 19',day:'Fri, June 19',group:'C',home:'Morocco 🇲🇦',away:'Haiti 🇭🇹',time:'6pm ET',venue:'Chicago',channels:['FS1','Telemundo'],live:false,usa:false},
-  {date:'Jul 19',day:'Sun, July 19 — FINAL',group:'Final',home:'TBD',away:'TBD',time:'3pm ET',venue:'MetLife Stadium, NJ',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-11T19:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Africa 🇿🇦',venue:'Mexico City',channels:['FOX','Telemundo','Tubi'],live:true,usa:false},
+  {utc:'2026-06-12T02:00:00Z',group:'A',home:'South Korea 🇰🇷',away:'Czechia 🇨🇿',venue:'Guadalajara',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-12T19:00:00Z',group:'B',home:'Canada 🇨🇦',away:'Bosnia-Herzegovina 🇧🇦',venue:'Toronto',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-13T01:00:00Z',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',venue:'Los Angeles',channels:['FOX','Telemundo','Tubi'],live:false,usa:true},
+  {utc:'2026-06-13T19:00:00Z',group:'B',home:'Qatar 🇶🇦',away:'Switzerland 🇨🇭',venue:'New York/NJ',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-13T22:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Morocco 🇲🇦',venue:'Dallas',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-14T01:00:00Z',group:'C',home:'Haiti 🇭🇹',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Philadelphia',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-14T04:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Seattle',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-14T17:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Curaçao 🇨🇼',venue:'Houston',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-14T20:00:00Z',group:'F',home:'Netherlands 🇳🇱',away:'Japan 🇯🇵',venue:'Arlington, TX',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-14T23:00:00Z',group:'E',home:'Ivory Coast 🇨🇮',away:'Ecuador 🇪🇨',venue:'Philadelphia',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-15T02:00:00Z',group:'F',home:'Sweden 🇸🇪',away:'Tunisia 🇹🇳',venue:'Guadalajara',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-15T16:00:00Z',group:'H',home:'Spain 🇪🇸',away:'Cape Verde 🇨🇻',venue:'Atlanta',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-15T19:00:00Z',group:'G',home:'Belgium 🇧🇪',away:'Egypt 🇪🇬',venue:'Miami',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-15T22:00:00Z',group:'H',home:'Argentina 🇦🇷',away:'Albania 🇦🇱',venue:'Houston',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-16T01:00:00Z',group:'G',home:'Iran 🇮🇷',away:'New Zealand 🇳🇿',venue:'Kansas City',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-16T16:00:00Z',group:'I',home:'France 🇫🇷',away:'Saudi Arabia 🇸🇦',venue:'Los Angeles',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-16T19:00:00Z',group:'J',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Nigeria 🇳🇬',venue:'Dallas',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-16T22:00:00Z',group:'I',home:'Ukraine 🇺🇦',away:'Cameroon 🇨🇲',venue:'Boston',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-17T01:00:00Z',group:'J',home:'Senegal 🇸🇳',away:'Serbia 🇷🇸',venue:'Seattle',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-17T16:00:00Z',group:'L',home:'Portugal 🇵🇹',away:'DR Congo 🇨🇩',venue:'Boston',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-17T19:00:00Z',group:'K',home:'Poland 🇵🇱',away:'Peru 🇵🇪',venue:'New York/NJ',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-17T22:00:00Z',group:'L',home:'Uzbekistan 🇺🇿',away:'Colombia 🇨🇴',venue:'Miami',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-18T01:00:00Z',group:'K',home:'Venezuela 🇻🇪',away:'Italy 🇮🇹',venue:'Monterrey',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-18T16:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'Czechia 🇨🇿',venue:'Atlanta',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-18T19:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Bosnia-Herzegovina 🇧🇦',venue:'Vancouver',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-19T01:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Korea 🇰🇷',venue:'Guadalajara',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-19T16:00:00Z',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Brazil 🇧🇷',venue:'San Francisco',channels:['FOX','Telemundo'],live:false,usa:false},
+  {utc:'2026-06-19T19:00:00Z',group:'D',home:'United States 🇺🇸',away:'Australia 🇦🇺',venue:'Seattle',channels:['FOX','Telemundo'],live:false,usa:true},
+  {utc:'2026-06-19T22:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Haiti 🇭🇹',venue:'Chicago',channels:['FS1','Telemundo'],live:false,usa:false},
+  {utc:'2026-07-19T19:00:00Z',group:'Final',home:'TBD',away:'TBD',venue:'MetLife Stadium, NJ',channels:['FOX','Telemundo'],live:false,usa:false},
 ];
 
 const GROUPS = {
@@ -251,18 +318,24 @@ function chClass(ch){
   return 'ch-generic';
 }
 
+// Today's local date string for highlighting
+const todayStr = new Date().toLocaleDateString([], {weekday:'short', month:'long', day:'numeric'});
+
 function renderSchedule(filter){
-  let list = document.getElementById('schedule-list');
+  const list = document.getElementById('schedule-list');
   let filtered = MATCHES;
-  if(filter==='today') filtered = MATCHES.filter(m=>m.date==='Jun 11');
+  if(filter==='today'){
+    filtered = MATCHES.filter(m=> localDay(m.utc) === todayStr);
+  }
   if(filter==='usa') filtered = MATCHES.filter(m=>m.usa);
   if(filter==='fox') filtered = MATCHES.filter(m=>m.channels.includes('FOX')||m.channels.includes('FS1'));
   let html='', lastDay='';
   filtered.forEach(m=>{
-    if(m.day!==lastDay){ html+=`<div class="day-header">${m.day}</div>`; lastDay=m.day; }
-    const tc = m.date==='Jun 11'?' today-card':'';
-    const flagHome = [...m.home].filter(c=>c.codePointAt(0)>0xFFFF||/\p{Emoji_Presentation}/u.test(c)).join('').trim();
-    const flagAway = [...m.away].filter(c=>c.codePointAt(0)>0xFFFF||/\p{Emoji_Presentation}/u.test(c)).join('').trim();
+    const dayLabel = m.group==='Final' ? 'Sun, July 19 — FINAL' : localDay(m.utc);
+    const timeLabel = localTime(m.utc);
+    if(dayLabel!==lastDay){ html+=`<div class="day-header">${dayLabel}</div>`; lastDay=dayLabel; }
+    const isToday = dayLabel === todayStr;
+    const tc = isToday ? ' today-card' : '';
     const nameHome = m.home.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*🏴󠁧󠁢󠁳󠁣󠁴󠁿/g,'').replace(/\s*🏴󠁧󠁢󠁥󠁮󠁧󠁿/g,'').trim();
     const nameAway = m.away.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*🏴󠁧󠁢󠁳󠁣󠁴󠁿/g,'').replace(/\s*🏴󠁧󠁢󠁥󠁮󠁧󠁿/g,'').trim();
     html+=`<div class="match-card${tc}">
@@ -270,7 +343,7 @@ function renderSchedule(filter){
         <span class="match-group">Group ${m.group}</span>
         <div style="display:flex;gap:6px;align-items:center;">
           ${m.live?'<span class="live-badge">● LIVE</span>':''}
-          <span class="match-time">${m.time}</span>
+          <span class="match-time">${timeLabel}</span>
         </div>
       </div>
       <div class="teams">
@@ -299,7 +372,43 @@ function renderGroups(){
 function filterSchedule(f,btn){
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
+  document.getElementById('team-select').value='';
   renderSchedule(f);
+}
+
+function filterByTeam(team){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  if(!team){ renderSchedule('all'); document.getElementById('btn-all').classList.add('active'); return; }
+  const filtered = MATCHES.filter(m=>m.home.includes(team)||m.away.includes(team));
+  let html='', lastDay='';
+  filtered.forEach(m=>{
+    const dayLabel = m.group==='Final'?'Sun, July 19 — FINAL':localDay(m.utc);
+    const timeLabel = localTime(m.utc);
+    if(dayLabel!==lastDay){ html+=`<div class="day-header">${dayLabel}</div>`; lastDay=dayLabel; }
+    const tc = dayLabel===todayStr?' today-card':'';
+    const nameHome=m.home.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}/gu,'').replace(/\s*\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}/gu,'').trim();
+    const nameAway=m.away.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}/gu,'').replace(/\s*\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}/gu,'').trim();
+    html+=`<div class="match-card${tc}">
+      <div class="match-header">
+        <span class="match-group">Group ${m.group}</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${m.live?'<span class="live-badge">● LIVE</span>':''}
+          <span class="match-time">${timeLabel}</span>
+        </div>
+      </div>
+      <div class="teams">
+        <div class="team"><span style="font-size:20px;">${m.home.split(' ').slice(-1)[0]}</span><span>${nameHome}</span></div>
+        <div class="score-display"><span class="vs">vs</span></div>
+        <div class="team"><span>${nameAway}</span><span style="font-size:20px;">${m.away.split(' ').slice(-1)[0]}</span></div>
+      </div>
+      <div class="match-footer">
+        ${m.channels.map(c=>`<span class="channel-badge ${chClass(c)}">${c}</span>`).join('')}
+        <span class="venue"><i class="ti ti-map-pin" style="font-size:13px;"></i>${m.venue}</span>
+      </div>
+    </div>`;
+  });
+  if(!html) html='<p style="color:var(--text3);font-size:14px;padding:1rem 0;">No matches found for this team.</p>';
+  document.getElementById('schedule-list').innerHTML=html;
 }
 
 function showTab(name,btn){
