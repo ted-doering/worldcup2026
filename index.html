@@ -247,6 +247,75 @@
 const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
 // ─────────────────────────────────────────────────────────────────────
 
+// ── API-SPORTS KEY FOR LIVE SCORES ───────────────────────────────────
+const SCORES_API_KEY = 'c266d4c20cf53936d53c221c04c45b2c';
+// ─────────────────────────────────────────────────────────────────────
+
+// Live scores cache: key = "HomeTeam vs AwayTeam", value = {home, away, status, minute}
+let matchScores = {};
+let lastFetch = 0;
+
+async function fetchLiveScores() {
+  // Only fetch once per 60 seconds
+  if (Date.now() - lastFetch < 60000) return;
+  lastFetch = Date.now();
+  try {
+    // FIFA World Cup 2026 league ID = 1 (FIFA World Cup), season = 2026
+    const res = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&timezone=UTC', {
+      headers: { 'x-apisports-key': SCORES_API_KEY }
+    });
+    const data = await res.json();
+    if (!data.response) return;
+    matchScores = {};
+    data.response.forEach(fix => {
+      const home = fix.teams.home.name;
+      const away = fix.teams.away.name;
+      const key = home + '|' + away;
+      matchScores[key] = {
+        home: fix.goals.home,
+        away: fix.goals.away,
+        status: fix.fixture.status.short, // NS, 1H, HT, 2H, FT, etc.
+        minute: fix.fixture.status.elapsed
+      };
+    });
+  } catch(e) {
+    console.warn('Score fetch failed:', e);
+  }
+}
+
+// Find score for a match by team names (fuzzy — strips emoji)
+function getScore(homeRaw, awayRaw) {
+  const strip = s => s.replace(/[^\w\s]/gu, '').trim().toLowerCase();
+  const h = strip(homeRaw);
+  const a = strip(awayRaw);
+  for (const [key, val] of Object.entries(matchScores)) {
+    const [kh, ka] = key.split('|').map(strip);
+    if ((kh.includes(h) || h.includes(kh)) && (ka.includes(a) || a.includes(ka))) {
+      return val;
+    }
+  }
+  return null;
+}
+
+function scoreDisplay(m) {
+  const sc = getScore(m.home, m.away);
+  if (!sc) return '<span class="vs">vs</span>';
+  const status = sc.status;
+  const hg = sc.home ?? '?';
+  const ag = sc.away ?? '?';
+  if (status === 'NS') return '<span class="vs">vs</span>';
+  if (status === 'FT' || status === 'AET' || status === 'PEN') {
+    return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span style="font-size:11px;color:var(--text3);margin-left:4px;">FT</span>`;
+  }
+  if (status === 'HT') {
+    return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span style="font-size:11px;color:#f59e0b;margin-left:4px;">HT</span>`;
+  }
+  if (['1H','2H','ET','P'].includes(status)) {
+    return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span class="live-badge" style="font-size:10px;margin-left:6px;">${sc.minute ?? ''}'</span>`;
+  }
+  return '<span class="vs">vs</span>';
+}
+
 // Convert an ET kickoff time to the visitor's local time string
 // etHour is 0-23 in ET (UTC-4 in June/July = EDT)
 function localTime(isoString) {
@@ -321,7 +390,8 @@ function chClass(ch){
 // Today's local date string for highlighting
 const todayStr = new Date().toLocaleDateString([], {weekday:'short', month:'long', day:'numeric'});
 
-function renderSchedule(filter){
+async function renderSchedule(filter){
+  await fetchLiveScores();
   const list = document.getElementById('schedule-list');
   let filtered = MATCHES;
   if(filter==='today'){
@@ -348,7 +418,7 @@ function renderSchedule(filter){
       </div>
       <div class="teams">
         <div class="team"><span style="font-size:20px;">${m.home.split(' ').slice(-1)[0]}</span><span>${nameHome}</span></div>
-        <div class="score-display"><span class="vs">vs</span></div>
+        <div class="score-display" id="score-${m.utc}">${scoreDisplay(m)}</div>
         <div class="team"><span>${nameAway}</span><span style="font-size:20px;">${m.away.split(' ').slice(-1)[0]}</span></div>
       </div>
       <div class="match-footer">
@@ -376,7 +446,8 @@ function filterSchedule(f,btn){
   renderSchedule(f);
 }
 
-function filterByTeam(team){
+async function filterByTeam(team){
+  await fetchLiveScores();
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   if(!team){ renderSchedule('all'); document.getElementById('btn-all').classList.add('active'); return; }
   const filtered = MATCHES.filter(m=>m.home.includes(team)||m.away.includes(team));
@@ -398,7 +469,7 @@ function filterByTeam(team){
       </div>
       <div class="teams">
         <div class="team"><span style="font-size:20px;">${m.home.split(' ').slice(-1)[0]}</span><span>${nameHome}</span></div>
-        <div class="score-display"><span class="vs">vs</span></div>
+        <div class="score-display" id="score-${m.utc}">${scoreDisplay(m)}</div>
         <div class="team"><span>${nameAway}</span><span style="font-size:20px;">${m.away.split(' ').slice(-1)[0]}</span></div>
       </div>
       <div class="match-footer">
@@ -451,6 +522,8 @@ async function doSearch(){
 
 renderSchedule('all');
 renderGroups();
+// Auto-refresh scores every 60 seconds
+setInterval(() => { lastFetch = 0; renderSchedule('all'); }, 60000);
 </script>
 </body>
 </html>
