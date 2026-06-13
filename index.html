@@ -148,10 +148,7 @@
   </div>
 
   <div id="tab-stats" class="section">
-    <div class="api-notice">
-      <strong>Player stats search</strong> uses the Anthropic API. Add your key by replacing <code>YOUR_API_KEY_HERE</code> in the source (Ctrl+F). Get one at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
-    </div>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">Search any player at the 2026 World Cup for stats, position, club, and history.</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">Search any World Cup player to see their profile, photo, and full Wikipedia page.</p>
     <div class="suggested">
       <button class="suggest-btn" onclick="searchPlayer('Lionel Messi 2026 World Cup')">Messi</button>
       <button class="suggest-btn" onclick="searchPlayer('Kylian Mbappé France 2026')">Mbappé</button>
@@ -202,8 +199,6 @@
 </div>
 
 <script>
-const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
-
 let matchScores = {};
 let lastFetch = 0;
 
@@ -517,28 +512,37 @@ async function doSearch(){
   const q = document.getElementById('player-input').value.trim();
   if(!q) return;
   const res = document.getElementById('stats-result');
-  if(ANTHROPIC_API_KEY === 'YOUR_API_KEY_HERE'){
-    res.innerHTML = '<p style="color:var(--wc-magenta);">Add your Anthropic API key to the source to enable player search.</p>';
-    return;
-  }
-  res.innerHTML = '<p class="loading-dots" style="color:var(--text2);">Looking up player info</p>';
+  res.innerHTML = '<p class="loading-dots" style="color:var(--text2);">Searching Wikipedia</p>';
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:800,
-        tools:[{type:'web_search_20250305',name:'web_search'}],
-        system:'You are a football/soccer stats assistant for the 2026 FIFA World Cup. Be concise. Include name, nationality, club, position, age, key stats, and World Cup 2026 role. Plain text only, no markdown.',
-        messages:[{role:'user',content:'Tell me about ' + q + ' at the 2026 World Cup — position, club, age, career stats, and World Cup info.'}]
-      })
-    });
-    const data = await resp.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
-    res.innerHTML = '<p>' + (text||'No info found. Try a different spelling.') + '</p>';
-  } catch(e){
-    res.innerHTML = '<p style="color:var(--wc-magenta);">Could not load player info. Check your API key and try again.</p>';
+    // Step 1: search Wikipedia for the best-matching page (bias toward footballer)
+    const searchUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+      encodeURIComponent(q + ' footballer') + '&format=json&origin=*&srlimit=1';
+    const searchData = await fetch(searchUrl).then(r => r.json());
+    const hit = searchData.query?.search?.[0];
+    if (!hit) {
+      res.innerHTML = '<p style="color:var(--text3);">No Wikipedia page found for "' + q + '". Try the full name.</p>';
+      return;
+    }
+    const title = hit.title;
+    // Step 2: fetch the page summary (extract + thumbnail) via REST API
+    const sumUrl = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title);
+    const sum = await fetch(sumUrl).then(r => r.json());
+    const extract = sum.extract || 'No summary available.';
+    const img = sum.thumbnail?.source || (sum.originalimage?.source) || '';
+    const pageUrl = sum.content_urls?.desktop?.page || ('https://en.wikipedia.org/wiki/' + encodeURIComponent(title));
+    const desc = sum.description ? '<div style="font-size:13px;color:var(--wc-purple);font-weight:600;margin-bottom:8px;">' + sum.description + '</div>' : '';
+    res.innerHTML =
+      '<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;">' +
+        (img ? '<img src="' + img + '" alt="' + title + '" style="width:110px;height:auto;border-radius:10px;border:1.5px solid var(--border);flex-shrink:0;" />' : '') +
+        '<div style="flex:1;min-width:200px;">' +
+          '<div style="font-size:18px;font-weight:700;margin-bottom:2px;">' + title + '</div>' +
+          desc +
+          '<p style="font-size:14px;line-height:1.7;">' + extract + '</p>' +
+          '<a href="' + pageUrl + '" target="_blank" style="display:inline-block;margin-top:10px;color:#fff;background:linear-gradient(120deg,var(--wc-magenta),var(--wc-purple));padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none;">Read full Wikipedia page →</a>' +
+        '</div>' +
+      '</div>';
+  } catch(e) {
+    res.innerHTML = '<p style="color:var(--wc-magenta);">Could not load player info. Please try again.</p>';
   }
 }
 
