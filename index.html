@@ -248,7 +248,7 @@ const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
 // ─────────────────────────────────────────────────────────────────────
 
 // ── API-SPORTS KEY FOR LIVE SCORES ───────────────────────────────────
-const SCORES_API_KEY = 'c266d4c20cf53936d53c221c04c45b2c';
+const SCORES_API_KEY = '68aec9291ee4ea32014a3260aaa681ee';
 // ─────────────────────────────────────────────────────────────────────
 
 // Live scores cache: key = "HomeTeam vs AwayTeam", value = {home, away, status, minute}
@@ -256,28 +256,37 @@ let matchScores = {};
 let lastFetch = 0;
 
 async function fetchLiveScores() {
-  // Only fetch once per 60 seconds
   if (Date.now() - lastFetch < 60000) return;
   lastFetch = Date.now();
   try {
-    // FIFA World Cup 2026 league ID = 1 (FIFA World Cup), season = 2026
-    const res = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&timezone=UTC', {
-      headers: { 'x-apisports-key': SCORES_API_KEY }
-    });
-    const data = await res.json();
-    if (!data.response) return;
+    // Fetch today's fixtures + live fixtures for World Cup (league=1, season=2026)
+    // We use allorigins as a CORS proxy since api-sports blocks direct browser requests
+    const today = new Date().toISOString().split('T')[0];
+    const urls = [
+      `https://v3.football.api-sports.io/fixtures?league=1&season=2026&date=${today}`,
+      `https://v3.football.api-sports.io/fixtures?league=1&season=2026&live=all`
+    ];
+    const results = await Promise.allSettled(urls.map(url =>
+      fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}&headers=${encodeURIComponent(JSON.stringify({'x-apisports-key': SCORES_API_KEY}))}`)
+        .then(r => r.json())
+        .then(d => JSON.parse(d.contents))
+    ));
     matchScores = {};
-    data.response.forEach(fix => {
-      const home = fix.teams.home.name;
-      const away = fix.teams.away.name;
-      const key = home + '|' + away;
-      matchScores[key] = {
-        home: fix.goals.home,
-        away: fix.goals.away,
-        status: fix.fixture.status.short, // NS, 1H, HT, 2H, FT, etc.
-        minute: fix.fixture.status.elapsed
-      };
+    results.forEach(r => {
+      if (r.status !== 'fulfilled' || !r.value?.response) return;
+      r.value.response.forEach(fix => {
+        const home = fix.teams.home.name;
+        const away = fix.teams.away.name;
+        const key = home + '|' + away;
+        matchScores[key] = {
+          home: fix.goals.home,
+          away: fix.goals.away,
+          status: fix.fixture.status.short,
+          minute: fix.fixture.status.elapsed
+        };
+      });
     });
+    console.log('Scores loaded:', Object.keys(matchScores));
   } catch(e) {
     console.warn('Score fetch failed:', e);
   }
