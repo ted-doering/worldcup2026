@@ -37,7 +37,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; }
   .page-wrap { position: relative; max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem 3rem; display: flex; align-items: flex-start; gap: 0; }
-  .side-graphic { width: 130px; flex-shrink: 0; position: sticky; top: 1.5rem; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 0.5rem; opacity: 0.92; }
+  .side-graphic { width: 130px; flex-shrink: 0; position: sticky; top: 1.5rem; align-self: flex-start; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 0.5rem; opacity: 0.92; }
   .side-graphic img { width: 110px; height: auto; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.18)); transition: opacity 0.2s; }
   .side-graphic img:hover { opacity: 0.85; }
   .container { flex: 1; min-width: 0; max-width: 720px; padding: 0 0.5rem; }
@@ -56,6 +56,7 @@
   .section.active { display: block; }
   .match-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
   .today-card { border-left: 3px solid #2563eb; }
+  .live-card { border-left: 3px solid #dc2626; background: rgba(220,38,38,0.04); }
   .match-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .match-group { font-size: 12px; color: var(--text3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
   .match-time { font-size: 12px; color: var(--text2); }
@@ -106,8 +107,26 @@
 <div class="page-wrap">
   <!-- World Cup Trophy — left -->
   <div class="side-graphic">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/FIFA_World_Cup_Trophy_2010.jpg/240px-FIFA_World_Cup_Trophy_2010.jpg"
-         alt="FIFA World Cup Trophy" title="FIFA World Cup Trophy" />
+    <svg viewBox="0 0 120 200" width="110" xmlns="http://www.w3.org/2000/svg" title="FIFA World Cup Trophy">
+      <!-- Cup base -->
+      <rect x="30" y="175" width="60" height="10" rx="3" fill="#c8a84b"/>
+      <rect x="35" y="163" width="50" height="14" rx="2" fill="#b8943a"/>
+      <!-- Stem -->
+      <rect x="50" y="130" width="20" height="35" rx="4" fill="#c8a84b"/>
+      <!-- Cup body -->
+      <ellipse cx="60" cy="128" rx="22" ry="8" fill="#d4af50"/>
+      <path d="M38 80 Q32 100 38 128 Q50 136 60 136 Q70 136 82 128 Q88 100 82 80 Z" fill="#f0c040"/>
+      <!-- Cup top opening -->
+      <ellipse cx="60" cy="80" rx="22" ry="7" fill="#d4af50"/>
+      <!-- Handles -->
+      <path d="M38 90 Q18 90 20 110 Q22 128 38 118" fill="none" stroke="#c8a84b" stroke-width="5" stroke-linecap="round"/>
+      <path d="M82 90 Q102 90 100 110 Q98 128 82 118" fill="none" stroke="#c8a84b" stroke-width="5" stroke-linecap="round"/>
+      <!-- Shine -->
+      <ellipse cx="50" cy="95" rx="6" ry="12" fill="rgba(255,255,255,0.2)" transform="rotate(-15 50 95)"/>
+      <!-- Stars -->
+      <text x="60" y="72" text-anchor="middle" font-size="10" fill="#fff">★★★</text>
+    </svg>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center;line-height:1.3;">FIFA World Cup<br>Trophy</div>
   </div>
 
   <div class="container">
@@ -134,11 +153,16 @@
 
   <!-- SCHEDULE -->
   <div id="tab-schedule" class="section active">
+    <div id="scores-notice" style="display:none;background:var(--info-bg);color:var(--info-text);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:1rem;">
+      ⚽ <strong>Live scores:</strong> Get a free API key at <a href="https://www.football-data.org/client/register" target="_blank" style="color:var(--info-text);font-weight:600;">football-data.org</a>, then add it to the code where it says <code>FDORG_KEY = 'demo'</code>.
+    </div>
     <div class="filter-bar">
-      <button class="filter-btn active" id="btn-all" onclick="filterSchedule('all',this)">All matches</button>
+      <button class="filter-btn active" id="btn-upcoming" onclick="filterSchedule('upcoming',this)">Upcoming</button>
       <button class="filter-btn" onclick="filterSchedule('today',this)">Today</button>
       <button class="filter-btn" onclick="filterSchedule('usa',this)">🇺🇸 USA</button>
       <button class="filter-btn" onclick="filterSchedule('fox',this)">FOX / FS1</button>
+      <button class="filter-btn" onclick="filterSchedule('past',this)">Past scores</button>
+      <button class="filter-btn" onclick="filterSchedule('all',this)">All</button>
     </div>
     <div style="margin-bottom:1rem;">
       <select id="team-select" onchange="filterByTeam(this.value)" style="width:100%;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg2);font-size:14px;color:var(--text);outline:none;cursor:pointer;">
@@ -259,11 +283,13 @@
 const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
 // ─────────────────────────────────────────────────────────────────────
 
-// ── API-SPORTS KEY FOR LIVE SCORES ───────────────────────────────────
-const SCORES_API_KEY = '68aec9291ee4ea32014a3260aaa681ee';
+// ── FOOTBALL-DATA.ORG KEY FOR LIVE SCORES (supports browser CORS) ────
+// Free tier: 10 req/min. Get key at football-data.org
+const SCORES_API_KEY = '68aec9291ee4ea32014a3260aaa681ee'; // your api-sports key kept for reference
+const FDORG_KEY = 'demo'; // Replace with your football-data.org key for live scores
 // ─────────────────────────────────────────────────────────────────────
 
-// Live scores cache: key = "HomeTeam vs AwayTeam", value = {home, away, status, minute}
+// Live scores cache
 let matchScores = {};
 let lastFetch = 0;
 
@@ -271,32 +297,31 @@ async function fetchLiveScores() {
   if (Date.now() - lastFetch < 60000) return;
   lastFetch = Date.now();
   try {
-    const today = new Date().toISOString().split('T')[0];
-    // Fetch both today's games and any currently live games
-    const [todayRes, liveRes] = await Promise.allSettled([
-      fetch(`https://v3.football.api-sports.io/fixtures?league=1&season=2026&date=${today}`, {
-        headers: { 'x-apisports-key': SCORES_API_KEY }
-      }).then(r => r.json()),
-      fetch(`https://v3.football.api-sports.io/fixtures?league=1&season=2026&live=all`, {
-        headers: { 'x-apisports-key': SCORES_API_KEY }
-      }).then(r => r.json())
-    ]);
-
-    matchScores = {};
-    [todayRes, liveRes].forEach(r => {
-      if (r.status !== 'fulfilled' || !r.value?.response) return;
-      r.value.response.forEach(fix => {
-        const home = fix.teams.home.name;
-        const away = fix.teams.away.name;
-        matchScores[home + '|' + away] = {
-          home: fix.goals.home,
-          away: fix.goals.away,
-          status: fix.fixture.status.short,
-          minute: fix.fixture.status.elapsed
-        };
-      });
+    // football-data.org supports CORS from browsers. WC 2026 competition code = WC
+    // Fetch all WC 2026 matches (includes scores as they happen)
+    const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches?season=2026', {
+      headers: { 'X-Auth-Token': FDORG_KEY }
     });
-    console.log('Scores fetched:', Object.keys(matchScores));
+    if (!res.ok) { console.warn('Score API returned', res.status); return; }
+    const data = await res.json();
+    matchScores = {};
+    (data.matches || []).forEach(m => {
+      const home = m.homeTeam.name;
+      const away = m.awayTeam.name;
+      const status = m.status; // SCHEDULED, IN_PLAY, PAUSED, FINISHED
+      const hg = m.score?.fullTime?.home;
+      const ag = m.score?.fullTime?.away;
+      const hh = m.score?.halfTime?.home;
+      const ah = m.score?.halfTime?.away;
+      const minute = m.minute ?? null;
+      matchScores[home + '|' + away] = {
+        home: status === 'PAUSED' ? hh : hg,
+        away: status === 'PAUSED' ? ah : ag,
+        status,
+        minute
+      };
+    });
+    console.log('Scores fetched:', Object.keys(matchScores).length, 'matches');
   } catch(e) {
     console.warn('Score fetch failed:', e);
   }
@@ -320,17 +345,18 @@ function scoreDisplay(m) {
   const sc = getScore(m.home, m.away);
   if (!sc) return '<span class="vs">vs</span>';
   const status = sc.status;
-  const hg = sc.home ?? '?';
-  const ag = sc.away ?? '?';
-  if (status === 'NS') return '<span class="vs">vs</span>';
-  if (status === 'FT' || status === 'AET' || status === 'PEN') {
+  const hg = sc.home ?? sc.home === 0 ? sc.home : '?';
+  const ag = sc.away ?? sc.away === 0 ? sc.away : '?';
+  if (!status || status === 'SCHEDULED' || status === 'TIMED') return '<span class="vs">vs</span>';
+  if (status === 'FINISHED' || status === 'AWARDED') {
     return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span style="font-size:11px;color:var(--text3);margin-left:4px;">FT</span>`;
   }
-  if (status === 'HT') {
+  if (status === 'PAUSED') {
     return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span style="font-size:11px;color:#f59e0b;margin-left:4px;">HT</span>`;
   }
-  if (['1H','2H','ET','P'].includes(status)) {
-    return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span class="live-badge" style="font-size:10px;margin-left:6px;">${sc.minute ?? ''}'</span>`;
+  if (status === 'IN_PLAY' || status === 'EXTRA_TIME' || status === 'PENALTY_SHOOTOUT') {
+    const minLabel = sc.minute ? `${sc.minute}'` : 'LIVE';
+    return `<span style="font-size:20px;font-weight:500;">${hg} – ${ag}</span><span class="live-badge" style="font-size:10px;margin-left:6px;">${minLabel}</span>`;
   }
   return '<span class="vs">vs</span>';
 }
@@ -348,39 +374,118 @@ function localDay(isoString) {
   return d.toLocaleDateString([], {weekday:'short', month:'long', day:'numeric'});
 }
 
-// All times stored as UTC ISO strings (EDT = UTC-4)
+// All times stored as UTC ISO strings
 const MATCHES = [
-  {utc:'2026-06-11T19:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Africa 🇿🇦',venue:'Mexico City',channels:['FOX','Telemundo','Tubi'],live:false,usa:false},
-  {utc:'2026-06-12T02:00:00Z',group:'A',home:'South Korea 🇰🇷',away:'Czechia 🇨🇿',venue:'Guadalajara',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-12T19:00:00Z',group:'B',home:'Canada 🇨🇦',away:'Bosnia-Herzegovina 🇧🇦',venue:'Toronto',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-13T01:00:00Z',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',venue:'Los Angeles',channels:['FOX','Telemundo','Tubi'],live:false,usa:true},
-  {utc:'2026-06-13T19:00:00Z',group:'B',home:'Qatar 🇶🇦',away:'Switzerland 🇨🇭',venue:'New York/NJ',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-13T22:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Morocco 🇲🇦',venue:'Dallas',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-14T01:00:00Z',group:'C',home:'Haiti 🇭🇹',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Philadelphia',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-14T04:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Seattle',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-14T17:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Curaçao 🇨🇼',venue:'Houston',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-14T20:00:00Z',group:'F',home:'Netherlands 🇳🇱',away:'Japan 🇯🇵',venue:'Arlington, TX',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-14T23:00:00Z',group:'E',home:'Ivory Coast 🇨🇮',away:'Ecuador 🇪🇨',venue:'Philadelphia',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-15T02:00:00Z',group:'F',home:'Sweden 🇸🇪',away:'Tunisia 🇹🇳',venue:'Guadalajara',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-15T16:00:00Z',group:'H',home:'Spain 🇪🇸',away:'Cape Verde 🇨🇻',venue:'Atlanta',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-15T19:00:00Z',group:'G',home:'Belgium 🇧🇪',away:'Egypt 🇪🇬',venue:'Miami',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-15T22:00:00Z',group:'H',home:'Argentina 🇦🇷',away:'Albania 🇦🇱',venue:'Houston',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-16T01:00:00Z',group:'G',home:'Iran 🇮🇷',away:'New Zealand 🇳🇿',venue:'Kansas City',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-16T16:00:00Z',group:'I',home:'France 🇫🇷',away:'Saudi Arabia 🇸🇦',venue:'Los Angeles',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-16T19:00:00Z',group:'J',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Nigeria 🇳🇬',venue:'Dallas',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-16T22:00:00Z',group:'I',home:'Ukraine 🇺🇦',away:'Cameroon 🇨🇲',venue:'Boston',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-17T01:00:00Z',group:'J',home:'Senegal 🇸🇳',away:'Serbia 🇷🇸',venue:'Seattle',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-17T16:00:00Z',group:'L',home:'Portugal 🇵🇹',away:'DR Congo 🇨🇩',venue:'Boston',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-17T19:00:00Z',group:'K',home:'Poland 🇵🇱',away:'Peru 🇵🇪',venue:'New York/NJ',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-17T22:00:00Z',group:'L',home:'Uzbekistan 🇺🇿',away:'Colombia 🇨🇴',venue:'Miami',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-18T01:00:00Z',group:'K',home:'Venezuela 🇻🇪',away:'Italy 🇮🇹',venue:'Monterrey',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-18T16:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'Czechia 🇨🇿',venue:'Atlanta',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-18T19:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Bosnia-Herzegovina 🇧🇦',venue:'Vancouver',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-19T01:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Korea 🇰🇷',venue:'Guadalajara',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-19T16:00:00Z',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Brazil 🇧🇷',venue:'San Francisco',channels:['FOX','Telemundo'],live:false,usa:false},
-  {utc:'2026-06-19T19:00:00Z',group:'D',home:'United States 🇺🇸',away:'Australia 🇦🇺',venue:'Seattle',channels:['FOX','Telemundo'],live:false,usa:true},
-  {utc:'2026-06-19T22:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Haiti 🇭🇹',venue:'Chicago',channels:['FS1','Telemundo'],live:false,usa:false},
-  {utc:'2026-07-19T19:00:00Z',group:'Final',home:'TBD',away:'TBD',venue:'MetLife Stadium, NJ',channels:['FOX','Telemundo'],live:false,usa:false},
+  // ── GROUP STAGE ─────────────────────────────────────────────────────
+  // Jun 11
+  {utc:'2026-06-11T19:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Africa 🇿🇦',venue:'Mexico City',channels:['FOX','Telemundo','Tubi'],usa:false},
+  {utc:'2026-06-12T02:00:00Z',group:'A',home:'South Korea 🇰🇷',away:'Czechia 🇨🇿',venue:'Guadalajara',channels:['FS1','Telemundo'],usa:false},
+  // Jun 12
+  {utc:'2026-06-12T19:00:00Z',group:'B',home:'Canada 🇨🇦',away:'Bosnia-Herzegovina 🇧🇦',venue:'Toronto',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-13T01:00:00Z',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',venue:'Los Angeles',channels:['FOX','Telemundo','Tubi'],usa:true},
+  // Jun 13
+  {utc:'2026-06-13T19:00:00Z',group:'B',home:'Qatar 🇶🇦',away:'Switzerland 🇨🇭',venue:'New York/NJ',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-13T22:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Morocco 🇲🇦',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-14T01:00:00Z',group:'C',home:'Haiti 🇭🇹',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
+  // Jun 14
+  {utc:'2026-06-14T04:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-14T17:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Curaçao 🇨🇼',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-14T20:00:00Z',group:'F',home:'Netherlands 🇳🇱',away:'Japan 🇯🇵',venue:'Arlington, TX',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-14T23:00:00Z',group:'E',home:'Ivory Coast 🇨🇮',away:'Ecuador 🇪🇨',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-15T02:00:00Z',group:'F',home:'Sweden 🇸🇪',away:'Tunisia 🇹🇳',venue:'Guadalajara',channels:['FS1','Telemundo'],usa:false},
+  // Jun 15
+  {utc:'2026-06-15T16:00:00Z',group:'H',home:'Spain 🇪🇸',away:'Cape Verde 🇨🇻',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-15T19:00:00Z',group:'G',home:'Belgium 🇧🇪',away:'Egypt 🇪🇬',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-15T22:00:00Z',group:'H',home:'Argentina 🇦🇷',away:'Albania 🇦🇱',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-16T01:00:00Z',group:'G',home:'Iran 🇮🇷',away:'New Zealand 🇳🇿',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
+  // Jun 16
+  {utc:'2026-06-16T16:00:00Z',group:'I',home:'France 🇫🇷',away:'Saudi Arabia 🇸🇦',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-16T19:00:00Z',group:'J',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Nigeria 🇳🇬',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-16T22:00:00Z',group:'I',home:'Ukraine 🇺🇦',away:'Cameroon 🇨🇲',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-17T01:00:00Z',group:'J',home:'Senegal 🇸🇳',away:'Serbia 🇷🇸',venue:'Seattle',channels:['FOX','Telemundo'],usa:false},
+  // Jun 17
+  {utc:'2026-06-17T16:00:00Z',group:'L',home:'Portugal 🇵🇹',away:'DR Congo 🇨🇩',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-17T19:00:00Z',group:'K',home:'Poland 🇵🇱',away:'Peru 🇵🇪',venue:'New York/NJ',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-17T22:00:00Z',group:'L',home:'Uzbekistan 🇺🇿',away:'Colombia 🇨🇴',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-18T01:00:00Z',group:'K',home:'Venezuela 🇻🇪',away:'Italy 🇮🇹',venue:'Monterrey',channels:['FOX','Telemundo'],usa:false},
+  // Jun 18
+  {utc:'2026-06-18T16:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'Czechia 🇨🇿',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-18T19:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Bosnia-Herzegovina 🇧🇦',venue:'Vancouver',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-19T01:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Korea 🇰🇷',venue:'Guadalajara',channels:['FOX','Telemundo'],usa:false},
+  // Jun 19
+  {utc:'2026-06-19T16:00:00Z',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Brazil 🇧🇷',venue:'San Francisco',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-19T19:00:00Z',group:'D',home:'United States 🇺🇸',away:'Australia 🇦🇺',venue:'Seattle',channels:['FOX','Telemundo'],usa:true},
+  {utc:'2026-06-19T22:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Haiti 🇭🇹',venue:'Chicago',channels:['FS1','Telemundo'],usa:false},
+  // Jun 20
+  {utc:'2026-06-20T16:00:00Z',group:'D',home:'Paraguay 🇵🇾',away:'Türkiye 🇹🇷',venue:'Houston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-20T19:00:00Z',group:'E',home:'Curaçao 🇨🇼',away:'Ivory Coast 🇨🇮',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-20T22:00:00Z',group:'E',home:'Ecuador 🇪🇨',away:'Germany 🇩🇪',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-21T01:00:00Z',group:'D',home:'United States 🇺🇸',away:'Türkiye 🇹🇷',venue:'Seattle',channels:['FOX','Telemundo'],usa:true},
+  // Jun 21
+  {utc:'2026-06-21T16:00:00Z',group:'F',home:'Japan 🇯🇵',away:'Sweden 🇸🇪',venue:'Guadalajara',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-21T19:00:00Z',group:'G',home:'New Zealand 🇳🇿',away:'Belgium 🇧🇪',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-21T22:00:00Z',group:'F',home:'Tunisia 🇹🇳',away:'Netherlands 🇳🇱',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-22T01:00:00Z',group:'G',home:'Egypt 🇪🇬',away:'Iran 🇮🇷',venue:'Kansas City',channels:['FOX','Telemundo'],usa:false},
+  // Jun 22
+  {utc:'2026-06-22T16:00:00Z',group:'H',home:'Cape Verde 🇨🇻',away:'Argentina 🇦🇷',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-22T19:00:00Z',group:'I',home:'Saudi Arabia 🇸🇦',away:'Ukraine 🇺🇦',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-22T22:00:00Z',group:'H',home:'Albania 🇦🇱',away:'Spain 🇪🇸',venue:'Houston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-23T01:00:00Z',group:'I',home:'Cameroon 🇨🇲',away:'France 🇫🇷',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
+  // Jun 23
+  {utc:'2026-06-23T16:00:00Z',group:'J',home:'Nigeria 🇳🇬',away:'Senegal 🇸🇳',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-23T19:00:00Z',group:'K',home:'Peru 🇵🇪',away:'Venezuela 🇻🇪',venue:'Monterrey',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-23T22:00:00Z',group:'J',home:'Serbia 🇷🇸',away:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',venue:'New York/NJ',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-24T01:00:00Z',group:'K',home:'Italy 🇮🇹',away:'Poland 🇵🇱',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
+  // Jun 24
+  {utc:'2026-06-24T16:00:00Z',group:'L',home:'DR Congo 🇨🇩',away:'Uzbekistan 🇺🇿',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-24T19:00:00Z',group:'B',home:'Bosnia-Herzegovina 🇧🇦',away:'Canada 🇨🇦',venue:'Vancouver',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-24T22:00:00Z',group:'L',home:'Colombia 🇨🇴',away:'Portugal 🇵🇹',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-25T01:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Qatar 🇶🇦',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
+  // Jun 25 — matchday 3 group stage
+  {utc:'2026-06-25T19:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'South Korea 🇰🇷',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-25T19:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'Czechia 🇨🇿',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
+  // Jun 26
+  {utc:'2026-06-26T19:00:00Z',group:'B',home:'Canada 🇨🇦',away:'Qatar 🇶🇦',venue:'Seattle',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-26T19:00:00Z',group:'B',home:'Bosnia-Herzegovina 🇧🇦',away:'Switzerland 🇨🇭',venue:'Los Angeles',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-26T23:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Haiti 🇭🇹',venue:'New York/NJ',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-26T23:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
+  // Jun 27
+  {utc:'2026-06-27T19:00:00Z',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',venue:'Kansas City',channels:['FOX','Telemundo'],usa:true},
+  {utc:'2026-06-27T19:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-27T23:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Ivory Coast 🇨🇮',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-27T23:00:00Z',group:'E',home:'Ecuador 🇪🇨',away:'Curaçao 🇨🇼',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
+  // ── KNOCKOUT STAGE (TBD teams) ───────────────────────────────────────
+  {utc:'2026-06-28T19:00:00Z',group:'R32',home:'1A',away:'3D/E/F',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-28T23:00:00Z',group:'R32',home:'1B',away:'3A/C/D',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-29T19:00:00Z',group:'R32',home:'1C',away:'3G/H/I',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-29T23:00:00Z',group:'R32',home:'2A',away:'2B',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-30T19:00:00Z',group:'R32',home:'1D',away:'3J/K/L',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-30T23:00:00Z',group:'R32',home:'1E',away:'3B/C/D',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-01T19:00:00Z',group:'R32',home:'1F',away:'3A/B/C',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-01T23:00:00Z',group:'R32',home:'2C',away:'2D',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-02T19:00:00Z',group:'R32',home:'1G',away:'3H/I/J',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-02T23:00:00Z',group:'R32',home:'2E',away:'2F',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-03T19:00:00Z',group:'R32',home:'1H',away:'3K/L',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-03T23:00:00Z',group:'R32',home:'2G',away:'2H',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-04T16:00:00Z',group:'R32',home:'1I',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-04T20:00:00Z',group:'R32',home:'1J',away:'TBD',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-05T16:00:00Z',group:'R32',home:'1K',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-05T20:00:00Z',group:'R32',home:'1L',away:'TBD',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  // Round of 16
+  {utc:'2026-07-06T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-06T23:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-07T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-07T23:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  // Quarterfinals
+  {utc:'2026-07-09T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-10T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-11T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  // Semifinals
+  {utc:'2026-07-14T19:00:00Z',group:'SF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-15T19:00:00Z',group:'SF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  // Bronze + Final
+  {utc:'2026-07-18T19:00:00Z',group:'3rd',home:'TBD',away:'TBD',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-07-19T19:00:00Z',group:'Final',home:'TBD',away:'TBD',venue:'MetLife Stadium, NJ',channels:['FOX','Telemundo'],usa:false},
 ];
 
 const GROUPS = {
@@ -406,48 +511,91 @@ function chClass(ch){
   return 'ch-generic';
 }
 
+let currentFilter = 'upcoming';
+
 // Today's local date string for highlighting
 const todayStr = new Date().toLocaleDateString([], {weekday:'short', month:'long', day:'numeric'});
+
+function matchCard(m) {
+  const sc = getScore(m.home, m.away);
+  const isLive = sc && ['IN_PLAY','EXTRA_TIME','PENALTY_SHOOTOUT','PAUSED'].includes(sc.status);
+  const isToday = localDay(m.utc) === todayStr;
+  const isTBD = m.home === 'TBD' || m.home.match(/^[0-9]/);
+  let cardClass = 'match-card';
+  if (isLive) cardClass += ' live-card';
+  else if (isToday) cardClass += ' today-card';
+  const nameHome = m.home.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*🏴󠁧󠁢󠁳󠁣󠁴󠁿/g,'').replace(/\s*🏴󠁧󠁢󠁥󠁮󠁧󠁿/g,'').trim();
+  const nameAway = m.away.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*🏴󠁧󠁢󠁳󠁣󠁴󠁿/g,'').replace(/\s*🏴󠁧󠁢󠁥󠁮󠁧󠁿/g,'').trim();
+  const flagHome = isTBD ? '' : m.home.split(' ').slice(-1)[0];
+  const flagAway = isTBD ? '' : m.away.split(' ').slice(-1)[0];
+  const roundLabel = {'R32':'Round of 32','R16':'Round of 16','QF':'Quarterfinal','SF':'Semifinal','3rd':'3rd Place','Final':'Final'}[m.group] || `Group ${m.group}`;
+  return `<div class="${cardClass}">
+    <div class="match-header">
+      <span class="match-group">${roundLabel}</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        ${isLive ? '<span class="live-badge">● LIVE</span>' : ''}
+        <span class="match-time">${localTime(m.utc)}</span>
+      </div>
+    </div>
+    <div class="teams">
+      <div class="team"><span style="font-size:20px;">${flagHome}</span><span>${nameHome}</span></div>
+      <div class="score-display">${scoreDisplay(m)}</div>
+      <div class="team"><span>${nameAway}</span><span style="font-size:20px;">${flagAway}</span></div>
+    </div>
+    <div class="match-footer">
+      ${m.channels.map(c=>`<span class="channel-badge ${chClass(c)}">${c}</span>`).join('')}
+      <span class="venue"><i class="ti ti-map-pin" style="font-size:13px;"></i>${m.venue}</span>
+    </div>
+  </div>`;
+}
+
+function renderList(matches) {
+  if (!matches.length) return '<p style="color:var(--text3);font-size:14px;padding:1rem 0;">No matches for this filter.</p>';
+  let html = '', lastDay = '';
+  matches.forEach(m => {
+    const dayLabel = ['Final','3rd','SF','QF','R16','R32'].includes(m.group)
+      ? localDay(m.utc) : localDay(m.utc);
+    if (dayLabel !== lastDay) { html += `<div class="day-header">${dayLabel}</div>`; lastDay = dayLabel; }
+    html += matchCard(m);
+  });
+  return html;
+}
 
 async function renderSchedule(filter){
   await fetchLiveScores();
   const list = document.getElementById('schedule-list');
-  let filtered = MATCHES;
-  if(filter==='today'){
-    filtered = MATCHES.filter(m=> localDay(m.utc) === todayStr);
-  }
-  if(filter==='usa') filtered = MATCHES.filter(m=>m.usa);
-  if(filter==='fox') filtered = MATCHES.filter(m=>m.channels.includes('FOX')||m.channels.includes('FS1'));
-  let html='', lastDay='';
-  filtered.forEach(m=>{
-    const dayLabel = m.group==='Final' ? 'Sun, July 19 — FINAL' : localDay(m.utc);
-    const timeLabel = localTime(m.utc);
-    if(dayLabel!==lastDay){ html+=`<div class="day-header">${dayLabel}</div>`; lastDay=dayLabel; }
-    const isToday = dayLabel === todayStr;
-    const tc = isToday ? ' today-card' : '';
-    const nameHome = m.home.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*🏴󠁧󠁢󠁳󠁣󠁴󠁿/g,'').replace(/\s*🏴󠁧󠁢󠁥󠁮󠁧󠁿/g,'').trim();
-    const nameAway = m.away.replace(/\s*[\u{1F1E0}-\u{1FFFF}]{2}/gu,'').replace(/\s*🏴󠁧󠁢󠁳󠁣󠁴󠁿/g,'').replace(/\s*🏴󠁧󠁢󠁥󠁮󠁧󠁿/g,'').trim();
-    html+=`<div class="match-card${tc}">
-      <div class="match-header">
-        <span class="match-group">Group ${m.group}</span>
-        <div style="display:flex;gap:6px;align-items:center;">
-          ${(()=>{const sc=getScore(m.home,m.away);return sc&&['1H','2H','ET','P','HT'].includes(sc.status)?'<span class="live-badge">● LIVE</span>':''})()}
-          <span class="match-time">${timeLabel}</span>
-        </div>
-      </div>
-      <div class="teams">
-        <div class="team"><span style="font-size:20px;">${m.home.split(' ').slice(-1)[0]}</span><span>${nameHome}</span></div>
-        <div class="score-display" id="score-${m.utc}">${scoreDisplay(m)}</div>
-        <div class="team"><span>${nameAway}</span><span style="font-size:20px;">${m.away.split(' ').slice(-1)[0]}</span></div>
-      </div>
-      <div class="match-footer">
-        ${m.channels.map(c=>`<span class="channel-badge ${chClass(c)}">${c}</span>`).join('')}
-        <span class="venue"><i class="ti ti-map-pin" style="font-size:13px;"></i>${m.venue}</span>
-      </div>
-    </div>`;
+  const now = Date.now();
+  // Separate live, upcoming, past
+  const live = MATCHES.filter(m => {
+    const sc = getScore(m.home, m.away);
+    return sc && ['IN_PLAY','EXTRA_TIME','PENALTY_SHOOTOUT','PAUSED'].includes(sc.status);
   });
-  if(!html) html='<p style="color:var(--text3);font-size:14px;padding:1rem 0;">No matches for this filter.</p>';
-  list.innerHTML=html;
+  let filtered;
+  if (filter === 'upcoming') {
+    // Show live first, then upcoming sorted soonest first, hide past
+    const upcoming = MATCHES.filter(m => {
+      const sc = getScore(m.home, m.away);
+      const isLive = sc && ['IN_PLAY','EXTRA_TIME','PENALTY_SHOOTOUT','PAUSED'].includes(sc.status);
+      const isPast = sc && ['FINISHED','AWARDED'].includes(sc.status);
+      const startedRecently = new Date(m.utc).getTime() < now - 2*60*60*1000; // >2hr ago
+      return isLive || (!isPast && !startedRecently);
+    });
+    filtered = upcoming;
+  } else if (filter === 'past') {
+    filtered = MATCHES.filter(m => {
+      const sc = getScore(m.home, m.away);
+      return (sc && ['FINISHED','AWARDED'].includes(sc.status)) || new Date(m.utc).getTime() < now - 3*60*60*1000;
+    }).reverse();
+  } else if (filter === 'today') {
+    filtered = MATCHES.filter(m => localDay(m.utc) === todayStr);
+  } else if (filter === 'usa') {
+    filtered = MATCHES.filter(m => m.usa);
+  } else if (filter === 'fox') {
+    filtered = MATCHES.filter(m => m.channels.includes('FOX') || m.channels.includes('FS1'));
+  } else {
+    filtered = MATCHES;
+  }
+  list.innerHTML = renderList(filtered);
 }
 
 function renderGroups(){
@@ -462,13 +610,15 @@ function filterSchedule(f,btn){
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('team-select').value='';
+  currentFilter = f;
   renderSchedule(f);
 }
+
 
 async function filterByTeam(team){
   await fetchLiveScores();
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  if(!team){ renderSchedule('all'); document.getElementById('btn-all').classList.add('active'); return; }
+  if(!team){ renderSchedule('upcoming'); document.getElementById('btn-all').classList.add('active'); return; }
   const filtered = MATCHES.filter(m=>m.home.includes(team)||m.away.includes(team));
   let html='', lastDay='';
   filtered.forEach(m=>{
@@ -482,7 +632,7 @@ async function filterByTeam(team){
       <div class="match-header">
         <span class="match-group">Group ${m.group}</span>
         <div style="display:flex;gap:6px;align-items:center;">
-          ${(()=>{const sc=getScore(m.home,m.away);return sc&&['1H','2H','ET','P','HT'].includes(sc.status)?'<span class="live-badge">● LIVE</span>':''})()}
+          ${(()=>{const sc=getScore(m.home,m.away);return sc&&['IN_PLAY','EXTRA_TIME','PENALTY_SHOOTOUT','PAUSED'].includes(sc.status)?'<span class="live-badge">● LIVE</span>':''})()}
           <span class="match-time">${timeLabel}</span>
         </div>
       </div>
@@ -539,18 +689,37 @@ async function doSearch(){
   }
 }
 
-renderSchedule('all');
+renderSchedule('upcoming');
 renderGroups();
+if (FDORG_KEY === '669140e055cb42d1820985716a05861c') {
+  document.getElementById('scores-notice').style.display = 'block';
+}
 // Auto-refresh scores every 60 seconds
-setInterval(() => { lastFetch = 0; renderSchedule('all'); }, 60000);
+setInterval(() => { lastFetch = 0; renderSchedule('upcoming'); }, 60000);
 </script>
 
   </div><!-- /container -->
 
   <!-- USMNT Shield — right -->
   <div class="side-graphic">
-    <img src="https://upload.wikimedia.org/wikipedia/en/thumb/a/a9/US_Soccer_logo.png/200px-US_Soccer_logo.png"
-         alt="US Soccer Shield" title="US Men's National Team" />
+    <svg viewBox="0 0 120 150" width="110" xmlns="http://www.w3.org/2000/svg" title="US Soccer">
+      <!-- Shield shape -->
+      <path d="M60 8 L108 28 L108 80 Q108 128 60 148 Q12 128 12 80 L12 28 Z" fill="#002868"/>
+      <!-- Red stripes -->
+      <clipPath id="shield-clip">
+        <path d="M60 8 L108 28 L108 80 Q108 128 60 148 Q12 128 12 80 L12 28 Z"/>
+      </clipPath>
+      <rect x="12" y="28" width="96" height="16" fill="#BF0A30" clip-path="url(#shield-clip)"/>
+      <rect x="12" y="60" width="96" height="16" fill="#BF0A30" clip-path="url(#shield-clip)"/>
+      <rect x="12" y="92" width="96" height="16" fill="#BF0A30" clip-path="url(#shield-clip)"/>
+      <!-- US text -->
+      <text x="60" y="95" text-anchor="middle" font-size="38" font-weight="900" fill="white" font-family="Arial Black, sans-serif">US</text>
+      <!-- Stars top -->
+      <text x="60" y="42" text-anchor="middle" font-size="13" fill="white">★ ★ ★</text>
+      <!-- Shield outline -->
+      <path d="M60 8 L108 28 L108 80 Q108 128 60 148 Q12 128 12 80 L12 28 Z" fill="none" stroke="white" stroke-width="3"/>
+    </svg>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center;line-height:1.3;">USMNT<br>2026</div>
   </div>
 
 </div><!-- /page-wrap -->
