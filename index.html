@@ -102,10 +102,17 @@
   .standings-table th.team-col { text-align: left; }
   .standings-table td { font-size: 12px; padding: 5px 2px; text-align: center; border-bottom: 1px solid var(--border); }
   .standings-table td.team-col { text-align: left; font-weight: 600; display: flex; align-items: center; gap: 5px; }
-  .standings-table tr.qualifying td { background: linear-gradient(90deg, rgba(27,182,166,0.08), transparent); }
+  .standings-table tr.qualifying td { background: linear-gradient(90deg, rgba(27,182,166,0.10), transparent); }
+  .standings-table tr.third-place td { background: linear-gradient(90deg, rgba(247,148,30,0.09), transparent); }
   .standings-table .pts { font-weight: 800; color: var(--wc-purple); }
-  .qual-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wc-teal); flex-shrink: 0; }
-  .standings-legend { font-size: 11px; color: var(--text3); margin-top: 10px; display: flex; align-items: center; gap: 5px; }
+  .standings-table .rank-col { width: 24px; }
+  .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 800; color: #fff; }
+  .rank-badge.rank-q { background: var(--wc-teal); }
+  .rank-badge.rank-3 { background: var(--wc-orange); }
+  .rank-badge.rank-out { background: var(--text3); }
+  .standings-legend { font-size: 11px; color: var(--text2); margin-top: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .standings-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .leg-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
   .section-title { font-size: 19px; font-weight: 700; margin-bottom: 1rem; }
   .search-row { display: flex; gap: 8px; margin-bottom: 1rem; }
   .search-row input { flex: 1; padding: 10px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--border2); background: var(--bg2); font-size: 14px; color: var(--text); outline: none; }
@@ -532,22 +539,31 @@ async function fetchStandings(){
       const gm = groupName.match(/[A-L]$/);
       if (gm) groupName = gm[0];
       const entries = (child.standings && child.standings.entries) || child.entries || [];
-      const rows = entries.map(e => {
-        const stat = k => {
-          const s = (e.stats||[]).find(x => x.name === k || x.abbreviation === k || x.type === k);
-          return s ? (s.displayValue !== undefined ? s.displayValue : s.value) : '-';
-        };
+      const numStat = (e, k) => {
+        const s = (e.stats||[]).find(x => x.name === k || x.abbreviation === k || x.type === k);
+        if (!s) return 0;
+        const v = s.value !== undefined ? s.value : parseFloat(s.displayValue);
+        return isNaN(v) ? 0 : v;
+      };
+      let rows = entries.map(e => {
+        const gf = numStat(e, 'pointsFor') || numStat(e, 'goalsFor');
+        const ga = numStat(e, 'pointsAgainst') || numStat(e, 'goalsAgainst');
+        let gd = numStat(e, 'pointDifferential');
+        if (!gd) gd = numStat(e, 'goalDifference');
+        if (!gd) gd = gf - ga;
         return {
           team: (e.team && (e.team.displayName || e.team.name || e.team.shortDisplayName)) || '',
-          rank: stat('rank'),
-          gp: stat('gamesPlayed'),
-          w: stat('wins'),
-          d: stat('ties'),
-          l: stat('losses'),
-          gd: (stat('pointDifferential') !== '-' ? stat('pointDifferential') : stat('goalDifference')),
-          pts: stat('points')
+          gp: numStat(e, 'gamesPlayed'),
+          w: numStat(e, 'wins'),
+          d: numStat(e, 'ties'),
+          l: numStat(e, 'losses'),
+          gf: gf,
+          gd: gd,
+          pts: numStat(e, 'points')
         };
       });
+      // Sort by World Cup tiebreakers: points, then goal difference, then goals scored
+      rows.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.team.localeCompare(b.team));
       if (groupName && rows.length) out[groupName] = rows;
     });
     console.log('Standings groups loaded:', Object.keys(out));
@@ -569,16 +585,20 @@ async function renderGroups(){
     let body;
     if (rows && rows.length) {
       body = '<table class="standings-table"><thead><tr>' +
-        '<th class="team-col">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>' +
+        '<th class="rank-col">#</th><th class="team-col">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>' +
         '</tr></thead><tbody>' +
         rows.map((r, i) => {
-          // Match flag from our GROUPS data
           const match = GROUPS[l].find(t => normGroupTeam(t.n).includes(normGroupTeam(r.team)) || normGroupTeam(r.team).includes(normGroupTeam(t.n)));
           const flag = match ? match.f : '';
-          const qualifying = i < 2;
-          return '<tr class="' + (qualifying?'qualifying':'') + '">' +
-            '<td class="team-col">' + (qualifying?'<span class="qual-dot"></span>':'<span style="width:6px;"></span>') + '<span style="font-size:15px;">' + flag + '</span>' + (match?match.n:r.team) + '</td>' +
-            '<td>' + r.gp + '</td><td>' + r.w + '</td><td>' + r.d + '</td><td>' + r.l + '</td><td>' + r.gd + '</td><td class="pts">' + r.pts + '</td>' +
+          const qualifying = i < 2;       // top 2 auto-advance
+          const thirdPlace = i === 2;     // 3rd may advance (best 8 third-place)
+          const rowCls = qualifying ? 'qualifying' : (thirdPlace ? 'third-place' : '');
+          const gdStr = (r.gd > 0 ? '+' : '') + r.gd;
+          const rankBadge = qualifying ? 'rank-q' : (thirdPlace ? 'rank-3' : 'rank-out');
+          return '<tr class="' + rowCls + '">' +
+            '<td><span class="rank-badge ' + rankBadge + '">' + (i+1) + '</span></td>' +
+            '<td class="team-col"><span style="font-size:15px;">' + flag + '</span>' + (match?match.n:r.team) + '</td>' +
+            '<td>' + r.gp + '</td><td>' + r.w + '</td><td>' + r.d + '</td><td>' + r.l + '</td><td>' + gdStr + '</td><td class="pts">' + r.pts + '</td>' +
           '</tr>';
         }).join('') +
         '</tbody></table>';
@@ -588,7 +608,10 @@ async function renderGroups(){
     }
     html += '<div class="group-card" style="grid-column:span 1;"><h4>Group ' + l + '</h4>' + body + '</div>';
   }
-  html += '<div class="standings-legend" style="grid-column:1/-1;"><span class="qual-dot"></span> Top 2 advance to knockout stage</div>';
+  html += '<div class="standings-legend" style="grid-column:1/-1;">' +
+    '<span><span class="leg-dot" style="background:var(--wc-teal);"></span> Top 2 advance</span>' +
+    '<span><span class="leg-dot" style="background:var(--wc-orange);"></span> 3rd place (8 best advance)</span>' +
+    '</div>';
   document.getElementById('group-grid').innerHTML = html;
 }
 
