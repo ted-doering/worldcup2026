@@ -95,6 +95,14 @@
   .info-card p { font-size: 14px; color: var(--text2); line-height: 1.6; }
   .api-notice { background: var(--bg2); border: 1.5px solid var(--border2); color: var(--text2); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; margin-bottom: 1rem; line-height: 1.5; }
   .api-notice a { color: var(--wc-magenta); font-weight: 600; }
+  .scorer-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+  .scorer-rank { font-size: 18px; font-weight: 800; width: 32px; text-align: center; background: linear-gradient(120deg, var(--wc-magenta), var(--wc-purple)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .scorer-info { flex: 1; min-width: 0; }
+  .scorer-name { font-size: 15px; font-weight: 600; }
+  .scorer-team { font-size: 12px; color: var(--text2); }
+  .scorer-goals { display: flex; align-items: baseline; gap: 4px; }
+  .scorer-goals .num { font-size: 22px; font-weight: 800; color: var(--wc-orange); }
+  .scorer-goals .lbl { font-size: 11px; color: var(--text3); text-transform: uppercase; }
   .loading-dots::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
   @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:'...'} }
 </style>
@@ -115,6 +123,7 @@
     <button class="tab active" onclick="showTab('schedule',this)"><i class="ti ti-calendar"></i> Schedule</button>
     <button class="tab" onclick="showTab('groups',this)"><i class="ti ti-layout-grid"></i> Groups</button>
     <button class="tab" onclick="showTab('stats',this)"><i class="ti ti-user-search"></i> Player Stats</button>
+    <button class="tab" onclick="showTab('scorers',this)"><i class="ti ti-trophy"></i> Top Scorers</button>
     <button class="tab" onclick="showTab('watch',this)"><i class="ti ti-device-tv"></i> How to Watch</button>
   </div>
 
@@ -158,6 +167,12 @@
     <div class="result-card" id="stats-result">
       <p style="color:var(--text3);">Search for a player to see their stats and info.</p>
     </div>
+  </div>
+
+  <div id="tab-scorers" class="section">
+    <p class="section-title">🏆 Golden Boot race</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">Live top scorers from across the tournament, powered by ESPN.</p>
+    <div id="scorers-list"><p style="color:var(--text3);font-size:14px;" class="loading-dots">Loading top scorers</p></div>
   </div>
 
   <div id="tab-watch" class="section">
@@ -493,6 +508,7 @@ function showTab(name, btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
+  if (name === 'scorers') renderScorers();
 }
 
 function searchPlayer(q){ document.getElementById('player-input').value=q; doSearch(); }
@@ -524,6 +540,71 @@ async function doSearch(){
   } catch(e){
     res.innerHTML = '<p style="color:var(--wc-magenta);">Could not load player info. Check your API key and try again.</p>';
   }
+}
+
+// ── Top scorers via ESPN ──────────────────────────────────────────────
+let scorersCache = null;
+let scorersFetchedAt = 0;
+
+async function fetchTopScorers() {
+  // Cache for 2 minutes
+  if (scorersCache && Date.now() - scorersFetchedAt < 120000) return scorersCache;
+  const tally = {}; // key: playerName|team -> {name, team, goals}
+  try {
+    // Get all events in the tournament window
+    const sb = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=120').then(r=>r.json());
+    const events = (sb.events||[]).filter(ev => {
+      const st = ev.competitions?.[0]?.status?.type?.name;
+      return st === 'STATUS_FINAL' || st === 'STATUS_FULL_TIME' || st === 'STATUS_IN_PROGRESS' || st === 'STATUS_HALFTIME' || st === 'STATUS_SECOND_HALF' || st === 'STATUS_FIRST_HALF';
+    });
+    // For each played event, pull the summary to read goal scorers
+    const summaries = await Promise.allSettled(events.map(ev =>
+      fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=' + ev.id).then(r=>r.json())
+    ));
+    summaries.forEach(s => {
+      if (s.status !== 'fulfilled') return;
+      const data = s.value;
+      // Goals appear in 'keyEvents' or 'scoringPlays' or each competitor's 'details'
+      const comp = data.header?.competitions?.[0];
+      const teamById = {};
+      (comp?.competitors||[]).forEach(c => { teamById[c.id] = c.team?.displayName || ''; });
+      const evList = data.keyEvents || data.scoringPlays || [];
+      evList.forEach(ke => {
+        const isGoal = (ke.type?.text||'').toLowerCase().includes('goal') && !(ke.type?.text||'').toLowerCase().includes('own');
+        if (!isGoal) return;
+        const athlete = ke.athletesInvolved?.[0];
+        if (!athlete) return;
+        const name = athlete.displayName || athlete.fullName;
+        const team = teamById[ke.team?.id] || athlete.team?.displayName || '';
+        if (!name) return;
+        const key = name + '|' + team;
+        if (!tally[key]) tally[key] = { name, team, goals: 0 };
+        tally[key].goals += 1;
+      });
+    });
+  } catch(e) {
+    console.warn('Top scorers fetch failed:', e);
+  }
+  const arr = Object.values(tally).sort((a,b) => b.goals - a.goals).slice(0, 20);
+  scorersCache = arr;
+  scorersFetchedAt = Date.now();
+  return arr;
+}
+
+async function renderScorers() {
+  const el = document.getElementById('scorers-list');
+  const scorers = await fetchTopScorers();
+  if (!scorers.length) {
+    el.innerHTML = '<p style="color:var(--text3);font-size:14px;">No goals scored yet — check back once matches are underway!</p>';
+    return;
+  }
+  el.innerHTML = scorers.map((s, i) =>
+    '<div class="scorer-row">' +
+      '<div class="scorer-rank">' + (i+1) + '</div>' +
+      '<div class="scorer-info"><div class="scorer-name">' + s.name + '</div><div class="scorer-team">' + s.team + '</div></div>' +
+      '<div class="scorer-goals"><span class="num">' + s.goals + '</span><span class="lbl">' + (s.goals===1?'goal':'goals') + '</span></div>' +
+    '</div>'
+  ).join('');
 }
 
 populateTeamDropdown();
