@@ -281,39 +281,42 @@
 const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
 // ─────────────────────────────────────────────────────────────────────
 
-// ── worldcup26.ir — FREE, no API key needed, CORS-enabled ───────────
-// Built specifically for WC 2026. Returns all matches with live scores.
+// ── ESPN public API — no key, CORS-friendly ──────────────────────────
 let matchScores = {};
 let lastFetch = 0;
 
 async function fetchLiveScores() {
-  if (Date.now() - lastFetch < 60000) return;
+  if (Date.now() - lastFetch < 55000) return;
   lastFetch = Date.now();
   try {
-    const res = await fetch('https://worldcup26.ir/get/games');
-    if (!res.ok) { console.warn('Score API returned', res.status); return; }
+    // Fetch today's scoreboard from ESPN's public undocumented API
+    const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${today}&limit=20`;
+    const res = await fetch(url);
+    if (!res.ok) { console.warn('ESPN API returned', res.status); return; }
     const data = await res.json();
     matchScores = {};
-    const games = Array.isArray(data) ? data : (data.games || data.matches || []);
-    games.forEach(m => {
-      // API returns team1/team2 or home/away
-      const home = m.team1 || m.home_team || m.home || '';
-      const away = m.team2 || m.away_team || m.away || '';
+    (data.events || []).forEach(event => {
+      const comp = event.competitions?.[0];
+      if (!comp) return;
+      const home = comp.competitors?.find(c => c.homeAway === 'home');
+      const away = comp.competitors?.find(c => c.homeAway === 'away');
       if (!home || !away) return;
-      // Score: score1/score2 or home_score/away_score
-      const hg = m.score1 ?? m.home_score ?? m.goals_home ?? null;
-      const ag = m.score2 ?? m.away_score ?? m.goals_away ?? null;
-      // Status: live, finished, scheduled
-      const rawStatus = (m.status || m.state || '').toLowerCase();
+      const homeName = home.team.displayName;
+      const awayName = away.team.displayName;
+      const hg = home.score !== undefined ? parseInt(home.score) : null;
+      const ag = away.score !== undefined ? parseInt(away.score) : null;
+      const statusType = comp.status?.type?.name || '';  // STATUS_SCHEDULED, STATUS_IN_PROGRESS, STATUS_HALFTIME, STATUS_FINAL
       let status = 'SCHEDULED';
-      if (rawStatus.includes('live') || rawStatus.includes('progress') || rawStatus.includes('1h') || rawStatus.includes('2h')) status = 'IN_PLAY';
-      else if (rawStatus.includes('half') || rawStatus.includes('ht') || rawStatus.includes('pause')) status = 'PAUSED';
-      else if (rawStatus.includes('finish') || rawStatus.includes('ft') || rawStatus.includes('ended') || rawStatus.includes('complete')) status = 'FINISHED';
-      matchScores[home + '|' + away] = { home: hg, away: ag, status, minute: m.minute || m.elapsed || null };
+      if (statusType === 'STATUS_IN_PROGRESS') status = 'IN_PLAY';
+      else if (statusType === 'STATUS_HALFTIME') status = 'PAUSED';
+      else if (statusType === 'STATUS_FINAL' || statusType === 'STATUS_FULL_TIME') status = 'FINISHED';
+      const minute = comp.status?.displayClock || null;
+      matchScores[homeName + '|' + awayName] = { home: hg, away: ag, status, minute };
     });
-    console.log('Scores loaded:', Object.keys(matchScores).length, 'matches', matchScores);
+    console.log('ESPN scores:', Object.keys(matchScores).length, 'matches today', matchScores);
   } catch(e) {
-    console.warn('Score fetch failed:', e);
+    console.warn('ESPN score fetch failed:', e);
   }
 }
 
