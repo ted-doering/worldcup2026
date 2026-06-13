@@ -469,10 +469,23 @@ async function renderSchedule(filter){
       return live || (!finished && !longPast);
     });
   } else if (filter === 'past') {
-    filtered = MATCHES.filter(m => {
+    // Only finished/clearly-past matches, grouped by day with most-recent day first,
+    // but matches WITHIN each day stay in kickoff order.
+    const past = MATCHES.filter(m => {
       const sc = getScore(m.home, m.away);
-      return (sc && sc.status==='FINISHED') || new Date(m.utc).getTime() < now - 3*60*60*1000;
-    }).reverse();
+      return (sc && sc.status === 'FINISHED') || new Date(m.utc).getTime() < now - 3*60*60*1000;
+    });
+    // Group by local day
+    const byDay = {};
+    past.forEach(m => {
+      const d = localDay(m.utc);
+      if (!byDay[d]) byDay[d] = [];
+      byDay[d].push(m);
+    });
+    // Order days by their actual date, newest first; matches inside each day ascending
+    filtered = Object.keys(byDay)
+      .sort((a, b) => new Date(byDay[b][0].utc) - new Date(byDay[a][0].utc))
+      .flatMap(d => byDay[d].sort((x, y) => new Date(x.utc) - new Date(y.utc)));
   } else if (filter === 'today') {
     filtered = MATCHES.filter(m => localDay(m.utc) === todayStr);
   } else if (filter === 'usa') {
