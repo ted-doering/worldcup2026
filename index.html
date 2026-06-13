@@ -509,27 +509,35 @@ async function fetchStandings(){
   if (standingsByGroup && Date.now() - standingsFetchedAt < 120000) return standingsByGroup;
   const out = {};
   try {
-    const data = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/standings').then(r=>r.json());
-    // ESPN nests groups under children[] each with standings.entries[]
-    const children = data.children || (data.standings ? [data] : []);
+    const data = await fetch('https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings').then(r=>r.json());
+    // ESPN /apis/v2 standings: { children: [ { name/abbreviation, standings: { entries:[...] } } ] }
+    let children = data.children || [];
+    if (!children.length && data.standings) children = [{ name: data.name || '', standings: data.standings }];
     children.forEach(child => {
-      const groupName = (child.name || '').replace(/group\s*/i,'').trim().toUpperCase();
-      const entries = child.standings?.entries || [];
-      out[groupName] = entries.map(e => {
-        const stat = k => { const s = (e.stats||[]).find(x => x.name === k || x.abbreviation === k); return s ? (s.displayValue ?? s.value) : '-'; };
+      let groupName = (child.name || child.abbreviation || '').replace(/group/i,'').trim().toUpperCase();
+      // sometimes it's "Group A" or just "A"
+      const gm = groupName.match(/[A-L]$/);
+      if (gm) groupName = gm[0];
+      const entries = (child.standings && child.standings.entries) || child.entries || [];
+      const rows = entries.map(e => {
+        const stat = k => {
+          const s = (e.stats||[]).find(x => x.name === k || x.abbreviation === k || x.type === k);
+          return s ? (s.displayValue !== undefined ? s.displayValue : s.value) : '-';
+        };
         return {
-          team: e.team?.displayName || e.team?.name || '',
-          abbr: e.team?.abbreviation || '',
+          team: (e.team && (e.team.displayName || e.team.name || e.team.shortDisplayName)) || '',
           rank: stat('rank'),
           gp: stat('gamesPlayed'),
           w: stat('wins'),
           d: stat('ties'),
           l: stat('losses'),
-          gd: stat('pointDifferential') !== '-' ? stat('pointDifferential') : stat('goalDifference'),
+          gd: (stat('pointDifferential') !== '-' ? stat('pointDifferential') : stat('goalDifference')),
           pts: stat('points')
         };
       });
+      if (groupName && rows.length) out[groupName] = rows;
     });
+    console.log('Standings groups loaded:', Object.keys(out));
   } catch(e) {
     console.warn('Standings fetch failed:', e);
   }
@@ -640,45 +648,73 @@ let scorersCache = null;
 let scorersFetchedAt = 0;
 
 async function fetchTopScorers() {
-  // Cache for 2 minutes
   if (scorersCache && Date.now() - scorersFetchedAt < 120000) return scorersCache;
-  const tally = {}; // key: playerName|team -> {name, team, goals}
+  let arr = [];
+
+  // PRIMARY: dedicated leaders endpoint
   try {
-    // Get all events in the tournament window
-    const sb = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=120').then(r=>r.json());
-    const events = (sb.events||[]).filter(ev => {
-      const st = ev.competitions?.[0]?.status?.type?.name;
-      return st === 'STATUS_FINAL' || st === 'STATUS_FULL_TIME' || st === 'STATUS_IN_PROGRESS' || st === 'STATUS_HALFTIME' || st === 'STATUS_SECOND_HALF' || st === 'STATUS_FIRST_HALF';
-    });
-    // For each played event, pull the summary to read goal scorers
-    const summaries = await Promise.allSettled(events.map(ev =>
-      fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=' + ev.id).then(r=>r.json())
-    ));
-    summaries.forEach(s => {
-      if (s.status !== 'fulfilled') return;
-      const data = s.value;
-      // Goals appear in 'keyEvents' or 'scoringPlays' or each competitor's 'details'
-      const comp = data.header?.competitions?.[0];
-      const teamById = {};
-      (comp?.competitors||[]).forEach(c => { teamById[c.id] = c.team?.displayName || ''; });
-      const evList = data.keyEvents || data.scoringPlays || [];
-      evList.forEach(ke => {
-        const isGoal = (ke.type?.text||'').toLowerCase().includes('goal') && !(ke.type?.text||'').toLowerCase().includes('own');
-        if (!isGoal) return;
-        const athlete = ke.athletesInvolved?.[0];
-        if (!athlete) return;
-        const name = athlete.displayName || athlete.fullName;
-        const team = teamById[ke.team?.id] || athlete.team?.displayName || '';
-        if (!name) return;
-        const key = name + '|' + team;
-        if (!tally[key]) tally[key] = { name, team, goals: 0 };
-        tally[key].goals += 1;
+    const lead = await fetch('https://site.web.api.espn.com/apis/common/v3/sports/soccer/fifa.world/statistics/byathlete?sort=offensive.totalGoals:desc&limit=25').then(r=>r.json());
+    const athletes = lead.athletes || (lead.leaders && lead.leaders[0] && lead.leaders[0].leaders) || [];
+    athletes.forEach(a => {
+      const ath = a.athlete || a;
+      const name = ath.displayName || ath.fullName || '';
+      const team = (ath.team && (ath.team.displayName || ath.team.abbreviation)) || (a.team && a.team.displayName) || '';
+      // find goals in categories
+      let goals = 0;
+      const cats = a.categories || a.statistics || [];
+      cats.forEach(cat => {
+        (cat.stats || cat.values || []).forEach(st => {
+          if ((st.name||'').toLowerCase().includes('goal') && !(st.name||'').toLowerCase().includes('own') && !(st.name||'').toLowerCase().includes('assist')) {
+            const v = parseInt(st.value !== undefined ? st.value : st.displayValue);
+            if (!isNaN(v)) goals = Math.max(goals, v);
+          }
+        });
       });
+      if (name && goals > 0) arr.push({ name, team, goals });
     });
-  } catch(e) {
-    console.warn('Top scorers fetch failed:', e);
+  } catch(e) { console.warn('Leaders endpoint failed:', e); }
+
+  // FALLBACK: derive from match summaries if leaders endpoint gave nothing
+  if (!arr.length) {
+    const tally = {};
+    try {
+      const sb = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=120').then(r=>r.json());
+      const events = (sb.events||[]).filter(ev => {
+        const st = ev.competitions && ev.competitions[0] && ev.competitions[0].status && ev.competitions[0].status.type && ev.competitions[0].status.type.name;
+        return st && st !== 'STATUS_SCHEDULED';
+      });
+      const summaries = await Promise.allSettled(events.map(ev =>
+        fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=' + ev.id).then(r=>r.json())
+      ));
+      summaries.forEach(s => {
+        if (s.status !== 'fulfilled') return;
+        const data = s.value;
+        const comp = data.header && data.header.competitions && data.header.competitions[0];
+        const teamById = {};
+        ((comp && comp.competitors)||[]).forEach(c => { teamById[c.id] = (c.team && c.team.displayName) || ''; });
+        // ESPN goals: scoringPlays or each competitor.details
+        const plays = data.scoringPlays || data.keyEvents || [];
+        plays.forEach(ke => {
+          const txt = ((ke.type && ke.type.text) || ke.scoringType || '').toLowerCase();
+          if (!txt.includes('goal') || txt.includes('own')) return;
+          const athletes = ke.athletesInvolved || (ke.participants ? ke.participants.map(p=>p.athlete) : []);
+          const athlete = athletes && athletes[0];
+          if (!athlete) return;
+          const name = athlete.displayName || athlete.fullName;
+          const team = teamById[(ke.team && ke.team.id)] || (athlete.team && athlete.team.displayName) || '';
+          if (!name) return;
+          const key = name + '|' + team;
+          if (!tally[key]) tally[key] = { name, team, goals: 0 };
+          tally[key].goals += 1;
+        });
+      });
+    } catch(e) { console.warn('Summary fallback failed:', e); }
+    arr = Object.values(tally);
   }
-  const arr = Object.values(tally).sort((a,b) => b.goals - a.goals).slice(0, 20);
+
+  arr.sort((a,b) => b.goals - a.goals);
+  arr = arr.slice(0, 20);
+  console.log('Top scorers:', arr.length);
   scorersCache = arr;
   scorersFetchedAt = Date.now();
   return arr;
