@@ -138,7 +138,7 @@
         <p>Jun 11 – Jul 19 · USA, Canada & Mexico · 48 teams · 104 matches</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <span class="live-badge">● LIVE</span>
+        <span id="global-live-badge" style="display:none;" class="live-badge">● LIVE</span>
         <span style="font-size:13px;color:var(--text2);">Group Stage</span>
       </div>
     </div>
@@ -577,7 +577,7 @@ async function renderSchedule(filter){
       const sc = getScore(m.home, m.away);
       const isLive = sc && ['IN_PLAY','EXTRA_TIME','PENALTY_SHOOTOUT','PAUSED'].includes(sc.status);
       const isPast = sc && ['FINISHED','AWARDED'].includes(sc.status);
-      const startedRecently = new Date(m.utc).getTime() < now - 2*60*60*1000; // >2hr ago
+      const startedRecently = new Date(m.utc).getTime() < now - 4*60*60*1000; // >4hr ago (safely past)
       return isLive || (!isPast && !startedRecently);
     });
     filtered = upcoming;
@@ -596,6 +596,13 @@ async function renderSchedule(filter){
     filtered = MATCHES;
   }
   list.innerHTML = renderList(filtered);
+  // Update global live badge
+  const anyLive = MATCHES.some(m => {
+    const sc = getScore(m.home, m.away);
+    return sc && ['IN_PLAY','EXTRA_TIME','PENALTY_SHOOTOUT','PAUSED'].includes(sc.status);
+  });
+  const badge = document.getElementById('global-live-badge');
+  if (badge) badge.style.display = anyLive ? 'inline-block' : 'none';
 }
 
 function renderGroups(){
@@ -697,27 +704,23 @@ if (FDORG_KEY === '669140e055cb42d1820985716a05861c') {
 // Auto-refresh scores every 60 seconds
 setInterval(() => { lastFetch = 0; renderSchedule('upcoming'); }, 60000);
 </script>
-
   </div><!-- /container -->
 
   <!-- USMNT Shield — right -->
   <div class="side-graphic">
-    <svg viewBox="0 0 120 150" width="110" xmlns="http://www.w3.org/2000/svg" title="US Soccer">
-      <!-- Shield shape -->
-      <path d="M60 8 L108 28 L108 80 Q108 128 60 148 Q12 128 12 80 L12 28 Z" fill="#002868"/>
-      <!-- Red stripes -->
-      <clipPath id="shield-clip">
-        <path d="M60 8 L108 28 L108 80 Q108 128 60 148 Q12 128 12 80 L12 28 Z"/>
-      </clipPath>
-      <rect x="12" y="28" width="96" height="16" fill="#BF0A30" clip-path="url(#shield-clip)"/>
-      <rect x="12" y="60" width="96" height="16" fill="#BF0A30" clip-path="url(#shield-clip)"/>
-      <rect x="12" y="92" width="96" height="16" fill="#BF0A30" clip-path="url(#shield-clip)"/>
-      <!-- US text -->
-      <text x="60" y="95" text-anchor="middle" font-size="38" font-weight="900" fill="white" font-family="Arial Black, sans-serif">US</text>
-      <!-- Stars top -->
-      <text x="60" y="42" text-anchor="middle" font-size="13" fill="white">★ ★ ★</text>
-      <!-- Shield outline -->
-      <path d="M60 8 L108 28 L108 80 Q108 128 60 148 Q12 128 12 80 L12 28 Z" fill="none" stroke="white" stroke-width="3"/>
+    <svg viewBox="0 0 120 160" width="110" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="shield-clip">
+          <path d="M60 8 L108 28 L108 82 Q108 130 60 150 Q12 130 12 82 L12 28 Z"/>
+        </clipPath>
+      </defs>
+      <path d="M60 8 L108 28 L108 82 Q108 130 60 150 Q12 130 12 82 L12 28 Z" fill="#002868"/>
+      <rect x="12" y="28" width="96" height="17" fill="#BF0A30" clip-path="url(#shield-clip)"/>
+      <rect x="12" y="62" width="96" height="17" fill="#BF0A30" clip-path="url(#shield-clip)"/>
+      <rect x="12" y="96" width="96" height="17" fill="#BF0A30" clip-path="url(#shield-clip)"/>
+      <text x="60" y="98" text-anchor="middle" font-size="38" font-weight="900" fill="white" font-family="Arial Black,sans-serif">US</text>
+      <text x="60" y="44" text-anchor="middle" font-size="13" fill="white">★ ★ ★</text>
+      <path d="M60 8 L108 28 L108 82 Q108 130 60 150 Q12 130 12 82 L12 28 Z" fill="none" stroke="white" stroke-width="3"/>
     </svg>
     <div style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center;line-height:1.3;">USMNT<br>2026</div>
   </div>
