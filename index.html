@@ -286,7 +286,7 @@ const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE';
 // ── FOOTBALL-DATA.ORG KEY FOR LIVE SCORES (supports browser CORS) ────
 // Free tier: 10 req/min. Get key at football-data.org
 const SCORES_API_KEY = '68aec9291ee4ea32014a3260aaa681ee'; // your api-sports key kept for reference
-const FDORG_KEY = 'demo'; // Replace with your football-data.org key for live scores
+const FDORG_KEY = '669140e055cb42d1820985716a05861c'; // Replace with your football-data.org key for live scores
 // ─────────────────────────────────────────────────────────────────────
 
 // Live scores cache
@@ -698,7 +698,7 @@ async function doSearch(){
 
 renderSchedule('upcoming');
 renderGroups();
-if (FDORG_KEY === '669140e055cb42d1820985716a05861c') {
+if (FDORG_KEY === 'demo') {
   document.getElementById('scores-notice').style.display = 'block';
 }
 // Auto-refresh scores every 60 seconds
