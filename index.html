@@ -244,6 +244,7 @@
 let matchScores = {};
 let matchBroadcasts = {};
 let matchEspnIds = {};   // name|name -> ESPN event id
+let espnFixtures = [];   // full schedule built live from ESPN (authoritative)
 let matchGoals = {};     // ESPN event id -> [{minute, player, team:'home'|'away', type:'goal'|'own'|'pen'}]
 let lastFetch = 0;
 let lastGoalsFetch = 0;
@@ -259,6 +260,7 @@ async function fetchLiveScores() {
     matchScores = {};
     matchBroadcasts = {};
     matchEspnIds = {};
+    espnFixtures = [];
     (data.events || []).forEach(ev => {
       const comp = ev.competitions && ev.competitions[0];
       if (!comp) return;
@@ -299,6 +301,28 @@ async function fetchLiveScores() {
       // Track ESPN event id under name keys for goal detail lookups
       matchEspnIds[hN + '|' + aN] = ev.id;
       matchEspnIds[aN + '|' + hN] = ev.id;
+
+      // Build authoritative fixture entry from ESPN
+      const homeInfo = lookupTeam(h.team.displayName);
+      const awayInfo = lookupTeam(a.team.displayName);
+      let grp = (homeInfo.group && homeInfo.group === awayInfo.group) ? homeInfo.group : '';
+      // Determine round for knockouts from ESPN notes/type
+      if (!grp) {
+        const note = (comp.notes && comp.notes[0] && comp.notes[0].headline) || (ev.season && ev.season.slug) || '';
+        const txt = (note + ' ' + (ev.name||'')).toLowerCase();
+        if (txt.includes('final') && !txt.includes('semi') && !txt.includes('quarter')) grp = 'Final';
+        else if (txt.includes('third') || txt.includes('3rd')) grp = '3rd';
+        else if (txt.includes('semi')) grp = 'SF';
+        else if (txt.includes('quarter')) grp = 'QF';
+        else if (txt.includes('round of 16')) grp = 'R16';
+        else if (txt.includes('round of 32')) grp = 'R32';
+        else grp = 'KO';
+      }
+      const venueName = (comp.venue && (comp.venue.fullName || (comp.venue.address && comp.venue.address.city))) || 'TBD';
+      const hName = (homeInfo.display || h.team.displayName) + (homeInfo.flag ? ' ' + homeInfo.flag : '');
+      const aName = (awayInfo.display || a.team.displayName) + (awayInfo.flag ? ' ' + awayInfo.flag : '');
+      const isUsa = /united states|usa/i.test(h.team.displayName + a.team.displayName);
+      espnFixtures.push({ utc: ev.date, group: grp, home: hName, away: aName, venue: venueName, channels: [], usa: isUsa, _id: ev.id });
       if (h.team.shortDisplayName && a.team.shortDisplayName) {
         const hS = normalize(h.team.shortDisplayName);
         const aS = normalize(a.team.shortDisplayName);
@@ -604,6 +628,39 @@ const GROUPS = {
 
 const ROUND_LABELS = {'R32':'Round of 32','R16':'Round of 16','QF':'Quarterfinal','SF':'Semifinal','3rd':'3rd Place','Final':'Final'};
 
+// Build normalized-name -> {flag, group, display} from our GROUPS (correct compositions)
+const TEAM_INDEX = (function(){
+  const idx = {};
+  for (const g in GROUPS) {
+    GROUPS[g].forEach(t => {
+      const key = t.n.toLowerCase().replace(/[^a-z]/g,'');
+      idx[key] = { flag: t.f, group: g, display: t.n };
+    });
+  }
+  // Aliases for ESPN spellings
+  const alias = {
+    'usa':'unitedstates', 'unitedstatesofamerica':'unitedstates',
+    'korearepublic':'southkorea', 'czechrepublic':'czechia',
+    'turkey':'turkiye', 'cotedivoire':'ivorycoast', 'ivorycoast':'ivorycoast',
+    'caboverde':'capeverde', 'congodr':'drcongo', 'drcongo':'drcongo',
+    'bosniaherzegovina':'bosniaherz', 'bosniaandherzegovina':'bosniaherz'
+  };
+  // Map our 'Bosnia-Herz.' key
+  if (idx['bosniaherz']) { /* already */ }
+  for (const a in alias) { if (idx[alias[a]]) idx[a] = idx[alias[a]]; }
+  return idx;
+})();
+
+function lookupTeam(espnName){
+  const key = (espnName||'').toLowerCase().replace(/[^a-z]/g,'');
+  if (TEAM_INDEX[key]) return TEAM_INDEX[key];
+  // partial / token match
+  for (const k in TEAM_INDEX) {
+    if (k.includes(key) || key.includes(k)) return TEAM_INDEX[k];
+  }
+  return { flag:'', group:'', display: espnName };
+}
+
 function chClass(ch){
   if(ch==='FOX') return 'ch-fox';
   if(ch==='FS1') return 'ch-fs1';
@@ -688,14 +745,24 @@ function renderList(matches) {
 
 let currentFilter = 'upcoming';
 
+function scheduleSource(){
+  // Prefer live ESPN fixtures (authoritative). Need a healthy count to trust it.
+  if (espnFixtures && espnFixtures.length >= 40) {
+    // sort chronologically
+    return espnFixtures.slice().sort((a,b)=> new Date(a.utc) - new Date(b.utc));
+  }
+  return MATCHES;
+}
+
 async function renderSchedule(filter){
   await fetchLiveScores();
   await fetchMatchGoals();
   currentFilter = filter;
   const now = Date.now();
+  const SRC = scheduleSource();
   let filtered;
   if (filter === 'upcoming') {
-    filtered = MATCHES.filter(m => {
+    filtered = SRC.filter(m => {
       const sc = getScore(m.home, m.away);
       const live = sc && (sc.status==='IN_PLAY'||sc.status==='PAUSED');
       const finished = sc && sc.status==='FINISHED';
@@ -705,7 +772,7 @@ async function renderSchedule(filter){
   } else if (filter === 'past') {
     // Only finished/clearly-past matches, grouped by day with most-recent day first,
     // but matches WITHIN each day stay in kickoff order.
-    const past = MATCHES.filter(m => {
+    const past = SRC.filter(m => {
       const sc = getScore(m.home, m.away);
       return (sc && sc.status === 'FINISHED') || new Date(m.utc).getTime() < now - 3*60*60*1000;
     });
@@ -721,16 +788,16 @@ async function renderSchedule(filter){
       .sort((a, b) => new Date(byDay[b][0].utc) - new Date(byDay[a][0].utc))
       .flatMap(d => byDay[d].sort((x, y) => new Date(x.utc) - new Date(y.utc)));
   } else if (filter === 'today') {
-    filtered = MATCHES.filter(m => localDay(m.utc) === todayStr);
+    filtered = SRC.filter(m => localDay(m.utc) === todayStr);
   } else if (filter === 'usa') {
-    filtered = MATCHES.filter(m => m.usa);
+    filtered = SRC.filter(m => m.usa);
   } else if (filter === 'fox') {
-    filtered = MATCHES.filter(m => m.channels.includes('FOX') || m.channels.includes('FS1'));
+    filtered = SRC.filter(m => m.channels.includes('FOX') || m.channels.includes('FS1'));
   } else {
     filtered = MATCHES;
   }
   document.getElementById('schedule-list').innerHTML = renderList(filtered);
-  const anyLive = MATCHES.some(isLiveMatch);
+  const anyLive = SRC.some(isLiveMatch);
   document.getElementById('global-live-badge').style.display = anyLive ? 'inline-block' : 'none';
 }
 
@@ -747,7 +814,7 @@ async function filterByTeam(team){
   await fetchLiveScores();
   await fetchMatchGoals();
   const want = team.trim();
-  const filtered = MATCHES.filter(m => teamName(m.home) === want || teamName(m.away) === want);
+  const filtered = scheduleSource().filter(m => teamName(m.home) === want || teamName(m.away) === want);
   document.getElementById('schedule-list').innerHTML = renderList(filtered);
 }
 
