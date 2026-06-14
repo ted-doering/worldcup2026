@@ -113,6 +113,9 @@
   .standings-legend { font-size: 11px; color: var(--text2); margin-top: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .standings-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .leg-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .standings-key { font-size: 11px; color: var(--text3); margin-top: 4px; display: flex; gap: 12px 18px; flex-wrap: wrap; padding-top: 8px; border-top: 1px dashed var(--border); }
+  .standings-key span { display: inline-flex; align-items: center; }
+  .standings-key b { color: var(--wc-purple); font-weight: 800; margin-right: 2px; }
   .section-title { font-size: 19px; font-weight: 700; margin-bottom: 1rem; }
   .search-row { display: flex; gap: 8px; margin-bottom: 1rem; }
   .search-row input { flex: 1; padding: 10px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--border2); background: var(--bg2); font-size: 14px; color: var(--text); outline: none; }
@@ -324,82 +327,112 @@ function localDay(iso) { return new Date(iso).toLocaleDateString([], {weekday:'s
 const todayStr = new Date().toLocaleDateString([], {weekday:'short', month:'long', day:'numeric'});
 
 const MATCHES = [
+  // Group stage — accurate dates/teams from FIFA official schedule
+  // Jun 11
   {utc:'2026-06-11T19:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Africa 🇿🇦',venue:'Mexico City',channels:['FOX','Telemundo','Tubi'],usa:false},
   {utc:'2026-06-12T02:00:00Z',group:'A',home:'South Korea 🇰🇷',away:'Czechia 🇨🇿',venue:'Guadalajara',channels:['FS1','Telemundo'],usa:false},
+  // Jun 12
   {utc:'2026-06-12T19:00:00Z',group:'B',home:'Canada 🇨🇦',away:'Bosnia-Herzegovina 🇧🇦',venue:'Toronto',channels:['FOX','Telemundo'],usa:false},
   {utc:'2026-06-13T01:00:00Z',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',venue:'Los Angeles',channels:['FOX','Telemundo','Tubi'],usa:true},
-  {utc:'2026-06-13T19:00:00Z',group:'B',home:'Qatar 🇶🇦',away:'Switzerland 🇨🇭',venue:'New York/NJ',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-13T22:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Morocco 🇲🇦',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-14T01:00:00Z',group:'C',home:'Haiti 🇭🇹',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-14T04:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  // Jun 13
+  {utc:'2026-06-13T19:00:00Z',group:'B',home:'Qatar 🇶🇦',away:'Switzerland 🇨🇭',venue:'San Francisco',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-13T22:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Morocco 🇲🇦',venue:'New York/NJ',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-14T01:00:00Z',group:'C',home:'Haiti 🇭🇹',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
+  // Jun 14
+  {utc:'2026-06-14T04:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Vancouver',channels:['FS1','Telemundo'],usa:false},
   {utc:'2026-06-14T17:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Curaçao 🇨🇼',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
   {utc:'2026-06-14T20:00:00Z',group:'F',home:'Netherlands 🇳🇱',away:'Japan 🇯🇵',venue:'Arlington, TX',channels:['FOX','Telemundo'],usa:false},
   {utc:'2026-06-14T23:00:00Z',group:'E',home:'Ivory Coast 🇨🇮',away:'Ecuador 🇪🇨',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-15T02:00:00Z',group:'F',home:'Sweden 🇸🇪',away:'Tunisia 🇹🇳',venue:'Guadalajara',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-15T02:00:00Z',group:'F',home:'Sweden 🇸🇪',away:'Tunisia 🇹🇳',venue:'Monterrey',channels:['FS1','Telemundo'],usa:false},
+  // Jun 15
   {utc:'2026-06-15T16:00:00Z',group:'H',home:'Spain 🇪🇸',away:'Cape Verde 🇨🇻',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
   {utc:'2026-06-15T19:00:00Z',group:'G',home:'Belgium 🇧🇪',away:'Egypt 🇪🇬',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-15T22:00:00Z',group:'H',home:'Argentina 🇦🇷',away:'Albania 🇦🇱',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-15T22:00:00Z',group:'H',home:'Saudi Arabia 🇸🇦',away:'Uruguay 🇺🇾',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
   {utc:'2026-06-16T01:00:00Z',group:'G',home:'Iran 🇮🇷',away:'New Zealand 🇳🇿',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-16T16:00:00Z',group:'I',home:'France 🇫🇷',away:'Saudi Arabia 🇸🇦',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-16T19:00:00Z',group:'J',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Nigeria 🇳🇬',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-16T22:00:00Z',group:'I',home:'Ukraine 🇺🇦',away:'Cameroon 🇨🇲',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-17T01:00:00Z',group:'J',home:'Senegal 🇸🇳',away:'Serbia 🇷🇸',venue:'Seattle',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-17T16:00:00Z',group:'L',home:'Portugal 🇵🇹',away:'DR Congo 🇨🇩',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-17T19:00:00Z',group:'K',home:'Poland 🇵🇱',away:'Peru 🇵🇪',venue:'New York/NJ',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-17T22:00:00Z',group:'L',home:'Uzbekistan 🇺🇿',away:'Colombia 🇨🇴',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-18T01:00:00Z',group:'K',home:'Venezuela 🇻🇪',away:'Italy 🇮🇹',venue:'Monterrey',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-18T16:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'Czechia 🇨🇿',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-18T19:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Bosnia-Herzegovina 🇧🇦',venue:'Vancouver',channels:['FS1','Telemundo'],usa:false},
+  // Jun 16
+  {utc:'2026-06-16T19:00:00Z',group:'I',home:'France 🇫🇷',away:'Senegal 🇸🇳',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-16T22:00:00Z',group:'I',home:'Iraq 🇮🇶',away:'Norway 🇳🇴',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-17T01:00:00Z',group:'J',home:'Argentina 🇦🇷',away:'Algeria 🇩🇿',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
+  // Jun 17
+  {utc:'2026-06-17T04:00:00Z',group:'J',home:'Austria 🇦🇹',away:'Jordan 🇯🇴',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-17T17:00:00Z',group:'K',home:'Portugal 🇵🇹',away:'Uzbekistan 🇺🇿',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-17T20:00:00Z',group:'L',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Ghana 🇬🇭',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-17T23:00:00Z',group:'L',home:'Panama 🇵🇦',away:'Croatia 🇭🇷',venue:'Kansas City',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-18T02:00:00Z',group:'K',home:'Colombia 🇨🇴',away:'DR Congo 🇨🇩',venue:'Toronto',channels:['FS1','Telemundo'],usa:false},
+  // Jun 18 — matchday 2 begins
+  {utc:'2026-06-18T19:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Bosnia-Herzegovina 🇧🇦',venue:'Vancouver',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-18T22:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'Czechia 🇨🇿',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
   {utc:'2026-06-19T01:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'South Korea 🇰🇷',venue:'Guadalajara',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-19T16:00:00Z',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Brazil 🇧🇷',venue:'San Francisco',channels:['FOX','Telemundo'],usa:false},
+  // Jun 19
   {utc:'2026-06-19T19:00:00Z',group:'D',home:'United States 🇺🇸',away:'Australia 🇦🇺',venue:'Seattle',channels:['FOX','Telemundo'],usa:true},
-  {utc:'2026-06-19T22:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Haiti 🇭🇹',venue:'Chicago',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-20T16:00:00Z',group:'D',home:'Paraguay 🇵🇾',away:'Türkiye 🇹🇷',venue:'Houston',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-20T19:00:00Z',group:'E',home:'Curaçao 🇨🇼',away:'Ivory Coast 🇨🇮',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-20T22:00:00Z',group:'E',home:'Ecuador 🇪🇨',away:'Germany 🇩🇪',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-21T01:00:00Z',group:'D',home:'United States 🇺🇸',away:'Türkiye 🇹🇷',venue:'Seattle',channels:['FOX','Telemundo'],usa:true},
-  {utc:'2026-06-21T16:00:00Z',group:'F',home:'Japan 🇯🇵',away:'Sweden 🇸🇪',venue:'Guadalajara',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-21T19:00:00Z',group:'G',home:'New Zealand 🇳🇿',away:'Belgium 🇧🇪',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-21T22:00:00Z',group:'F',home:'Tunisia 🇹🇳',away:'Netherlands 🇳🇱',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-22T01:00:00Z',group:'G',home:'Egypt 🇪🇬',away:'Iran 🇮🇷',venue:'Kansas City',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-22T16:00:00Z',group:'H',home:'Cape Verde 🇨🇻',away:'Argentina 🇦🇷',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-22T19:00:00Z',group:'I',home:'Saudi Arabia 🇸🇦',away:'Ukraine 🇺🇦',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-22T22:00:00Z',group:'H',home:'Albania 🇦🇱',away:'Spain 🇪🇸',venue:'Houston',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-23T01:00:00Z',group:'I',home:'Cameroon 🇨🇲',away:'France 🇫🇷',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-23T16:00:00Z',group:'J',home:'Nigeria 🇳🇬',away:'Senegal 🇸🇳',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-23T19:00:00Z',group:'K',home:'Peru 🇵🇪',away:'Venezuela 🇻🇪',venue:'Monterrey',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-23T22:00:00Z',group:'J',home:'Serbia 🇷🇸',away:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',venue:'New York/NJ',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-24T01:00:00Z',group:'K',home:'Italy 🇮🇹',away:'Poland 🇵🇱',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-24T16:00:00Z',group:'L',home:'DR Congo 🇨🇩',away:'Uzbekistan 🇺🇿',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-24T19:00:00Z',group:'B',home:'Bosnia-Herzegovina 🇧🇦',away:'Canada 🇨🇦',venue:'Vancouver',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-24T22:00:00Z',group:'L',home:'Colombia 🇨🇴',away:'Portugal 🇵🇹',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-25T01:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Qatar 🇶🇦',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-25T19:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'South Korea 🇰🇷',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-25T19:00:00Z',group:'A',home:'Mexico 🇲🇽',away:'Czechia 🇨🇿',venue:'Dallas',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-26T19:00:00Z',group:'B',home:'Canada 🇨🇦',away:'Qatar 🇶🇦',venue:'Seattle',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-26T19:00:00Z',group:'B',home:'Bosnia-Herzegovina 🇧🇦',away:'Switzerland 🇨🇭',venue:'Los Angeles',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-26T23:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Haiti 🇭🇹',venue:'New York/NJ',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-26T23:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-27T19:00:00Z',group:'D',home:'United States 🇺🇸',away:'Paraguay 🇵🇾',venue:'Kansas City',channels:['FOX','Telemundo'],usa:true},
-  {utc:'2026-06-27T19:00:00Z',group:'D',home:'Australia 🇦🇺',away:'Türkiye 🇹🇷',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-27T23:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Ivory Coast 🇨🇮',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-27T23:00:00Z',group:'E',home:'Ecuador 🇪🇨',away:'Curaçao 🇨🇼',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
-  {utc:'2026-06-28T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-29T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-06-30T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-01T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-02T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'Seattle',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-03T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-04T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'Philadelphia',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-05T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-06T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'New York/NJ',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-07T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'Kansas City',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-09T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-10T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-11T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-14T19:00:00Z',group:'SF',home:'TBD',away:'TBD',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-15T19:00:00Z',group:'SF',home:'TBD',away:'TBD',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
-  {utc:'2026-07-18T19:00:00Z',group:'3rd',home:'TBD',away:'TBD',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-19T22:00:00Z',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Morocco 🇲🇦',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-20T01:00:00Z',group:'C',home:'Brazil 🇧🇷',away:'Haiti 🇭🇹',venue:'Philadelphia',channels:['FOX','Telemundo'],usa:false},
+  // Jun 20
+  {utc:'2026-06-20T04:00:00Z',group:'D',home:'Türkiye 🇹🇷',away:'Paraguay 🇵🇾',venue:'San Francisco',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-20T17:00:00Z',group:'F',home:'Netherlands 🇳🇱',away:'Sweden 🇸🇪',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-20T20:00:00Z',group:'E',home:'Germany 🇩🇪',away:'Ivory Coast 🇨🇮',venue:'Toronto',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-21T00:00:00Z',group:'E',home:'Ecuador 🇪🇨',away:'Curaçao 🇨🇼',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
+  // Jun 21
+  {utc:'2026-06-21T04:00:00Z',group:'F',home:'Tunisia 🇹🇳',away:'Japan 🇯🇵',venue:'Guadalajara',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-21T16:00:00Z',group:'H',home:'Spain 🇪🇸',away:'Saudi Arabia 🇸🇦',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-21T19:00:00Z',group:'G',home:'Belgium 🇧🇪',away:'Iran 🇮🇷',venue:'Los Angeles',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-21T22:00:00Z',group:'H',home:'Uruguay 🇺🇾',away:'Cape Verde 🇨🇻',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-22T01:00:00Z',group:'G',home:'New Zealand 🇳🇿',away:'Egypt 🇪🇬',venue:'Vancouver',channels:['FOX','Telemundo'],usa:false},
+  // Jun 22
+  {utc:'2026-06-22T17:00:00Z',group:'J',home:'Argentina 🇦🇷',away:'Austria 🇦🇹',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-22T21:00:00Z',group:'I',home:'France 🇫🇷',away:'Iraq 🇮🇶',venue:'Boston',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-23T00:00:00Z',group:'I',home:'Norway 🇳🇴',away:'Senegal 🇸🇳',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-23T03:00:00Z',group:'J',home:'Jordan 🇯🇴',away:'Algeria 🇩🇿',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  // Jun 23
+  {utc:'2026-06-23T17:00:00Z',group:'K',home:'Portugal 🇵🇹',away:'Uzbekistan 🇺🇿',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-23T20:00:00Z',group:'L',home:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',away:'Ghana 🇬🇭',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-23T23:00:00Z',group:'L',home:'Panama 🇵🇦',away:'Croatia 🇭🇷',venue:'Kansas City',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-24T02:00:00Z',group:'K',home:'Colombia 🇨🇴',away:'DR Congo 🇨🇩',venue:'Toronto',channels:['FS1','Telemundo'],usa:false},
+  // Jun 24 — matchday 3
+  {utc:'2026-06-24T19:00:00Z',group:'B',home:'Switzerland 🇨🇭',away:'Canada 🇨🇦',venue:'Vancouver',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-24T19:00:00Z',group:'B',home:'Bosnia-Herzegovina 🇧🇦',away:'Qatar 🇶🇦',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-24T22:00:00Z',group:'C',home:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿',away:'Brazil 🇧🇷',venue:'San Francisco',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-24T22:00:00Z',group:'C',home:'Morocco 🇲🇦',away:'Haiti 🇭🇹',venue:'New York/NJ',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-25T01:00:00Z',group:'A',home:'Czechia 🇨🇿',away:'Mexico 🇲🇽',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-25T01:00:00Z',group:'A',home:'South Africa 🇿🇦',away:'South Korea 🇰🇷',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
+  // Jun 25
+  {utc:'2026-06-25T20:00:00Z',group:'E',home:'Ecuador 🇪🇨',away:'Germany 🇩🇪',venue:'New York/NJ',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-25T20:00:00Z',group:'E',home:'Curaçao 🇨🇼',away:'Ivory Coast 🇨🇮',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-25T23:00:00Z',group:'F',home:'Japan 🇯🇵',away:'Sweden 🇸🇪',venue:'Arlington, TX',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-25T23:00:00Z',group:'F',home:'Tunisia 🇹🇳',away:'Netherlands 🇳🇱',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-26T02:00:00Z',group:'D',home:'Türkiye 🇹🇷',away:'United States 🇺🇸',venue:'Los Angeles',channels:['FOX','Telemundo'],usa:true},
+  {utc:'2026-06-26T02:00:00Z',group:'D',home:'Paraguay 🇵🇾',away:'Australia 🇦🇺',venue:'San Francisco',channels:['FS1','Telemundo'],usa:false},
+  // Jun 26
+  {utc:'2026-06-26T19:00:00Z',group:'I',home:'Norway 🇳🇴',away:'France 🇫🇷',venue:'Boston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-26T19:00:00Z',group:'I',home:'Senegal 🇸🇳',away:'Iraq 🇮🇶',venue:'Miami',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-26T22:00:00Z',group:'G',home:'Iran 🇮🇷',away:'Belgium 🇧🇪',venue:'Houston',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-26T22:00:00Z',group:'G',home:'Egypt 🇪🇬',away:'New Zealand 🇳🇿',venue:'Vancouver',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-27T01:00:00Z',group:'H',home:'Cape Verde 🇨🇻',away:'Saudi Arabia 🇸🇦',venue:'Miami',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-27T01:00:00Z',group:'H',home:'Uruguay 🇺🇾',away:'Spain 🇪🇸',venue:'Atlanta',channels:['FS1','Telemundo'],usa:false},
+  // Jun 27
+  {utc:'2026-06-27T19:00:00Z',group:'J',home:'Algeria 🇩🇿',away:'Argentina 🇦🇷',venue:'Dallas',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-27T19:00:00Z',group:'J',home:'Jordan 🇯🇴',away:'Austria 🇦🇹',venue:'Seattle',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-27T22:00:00Z',group:'K',home:'DR Congo 🇨🇩',away:'Portugal 🇵🇹',venue:'Toronto',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-27T22:00:00Z',group:'K',home:'Uzbekistan 🇺🇿',away:'Colombia 🇨🇴',venue:'Philadelphia',channels:['FS1','Telemundo'],usa:false},
+  {utc:'2026-06-28T01:00:00Z',group:'L',home:'Croatia 🇭🇷',away:'England 🏴󠁧󠁢󠁥󠁮󠁧󠁿',venue:'Atlanta',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-28T01:00:00Z',group:'L',home:'Ghana 🇬🇭',away:'Panama 🇵🇦',venue:'Kansas City',channels:['FS1','Telemundo'],usa:false},
+  // Knockouts — TBD pairings
+  {utc:'2026-06-28T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-29T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-06-30T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-01T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-02T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-03T19:00:00Z',group:'R32',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-04T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-05T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-06T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-07T19:00:00Z',group:'R16',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-09T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-10T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-11T19:00:00Z',group:'QF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-14T19:00:00Z',group:'SF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-15T19:00:00Z',group:'SF',home:'TBD',away:'TBD',venue:'TBD',channels:['FOX','Telemundo'],usa:false},
+  {utc:'2026-07-18T19:00:00Z',group:'3rd',home:'TBD',away:'TBD',venue:'TBD',channels:['FS1','Telemundo'],usa:false},
   {utc:'2026-07-19T19:00:00Z',group:'Final',home:'TBD',away:'TBD',venue:'MetLife Stadium, NJ',channels:['FOX','Telemundo'],usa:false},
 ];
 
@@ -411,11 +444,11 @@ const GROUPS = {
   E:[{f:'🇩🇪',n:'Germany'},{f:'🇨🇼',n:'Curaçao'},{f:'🇨🇮',n:'Ivory Coast'},{f:'🇪🇨',n:'Ecuador'}],
   F:[{f:'🇳🇱',n:'Netherlands'},{f:'🇯🇵',n:'Japan'},{f:'🇸🇪',n:'Sweden'},{f:'🇹🇳',n:'Tunisia'}],
   G:[{f:'🇧🇪',n:'Belgium'},{f:'🇪🇬',n:'Egypt'},{f:'🇮🇷',n:'Iran'},{f:'🇳🇿',n:'New Zealand'}],
-  H:[{f:'🇪🇸',n:'Spain'},{f:'🇨🇻',n:'Cape Verde'},{f:'🇦🇷',n:'Argentina'},{f:'🇦🇱',n:'Albania'}],
-  I:[{f:'🇫🇷',n:'France'},{f:'🇸🇦',n:'Saudi Arabia'},{f:'🇺🇦',n:'Ukraine'},{f:'🇨🇲',n:'Cameroon'}],
-  J:[{f:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',n:'England'},{f:'🇳🇬',n:'Nigeria'},{f:'🇸🇳',n:'Senegal'},{f:'🇷🇸',n:'Serbia'}],
-  K:[{f:'🇵🇱',n:'Poland'},{f:'🇵🇪',n:'Peru'},{f:'🇻🇪',n:'Venezuela'},{f:'🇮🇹',n:'Italy'}],
-  L:[{f:'🇵🇹',n:'Portugal'},{f:'🇨🇩',n:'DR Congo'},{f:'🇺🇿',n:'Uzbekistan'},{f:'🇨🇴',n:'Colombia'}],
+  H:[{f:'🇪🇸',n:'Spain'},{f:'🇨🇻',n:'Cape Verde'},{f:'🇸🇦',n:'Saudi Arabia'},{f:'🇺🇾',n:'Uruguay'}],
+  I:[{f:'🇫🇷',n:'France'},{f:'🇸🇳',n:'Senegal'},{f:'🇳🇴',n:'Norway'},{f:'🇮🇶',n:'Iraq'}],
+  J:[{f:'🇦🇷',n:'Argentina'},{f:'🇩🇿',n:'Algeria'},{f:'🇦🇹',n:'Austria'},{f:'🇯🇴',n:'Jordan'}],
+  K:[{f:'🇵🇹',n:'Portugal'},{f:'🇺🇿',n:'Uzbekistan'},{f:'🇨🇴',n:'Colombia'},{f:'🇨🇩',n:'DR Congo'}],
+  L:[{f:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',n:'England'},{f:'🇭🇷',n:'Croatia'},{f:'🇬🇭',n:'Ghana'},{f:'🇵🇦',n:'Panama'}],
 };
 
 const ROUND_LABELS = {'R32':'Round of 32','R16':'Round of 16','QF':'Quarterfinal','SF':'Semifinal','3rd':'3rd Place','Final':'Final'};
@@ -611,6 +644,14 @@ async function renderGroups(){
   html += '<div class="standings-legend" style="grid-column:1/-1;">' +
     '<span><span class="leg-dot" style="background:var(--wc-teal);"></span> Top 2 advance</span>' +
     '<span><span class="leg-dot" style="background:var(--wc-orange);"></span> 3rd place (8 best advance)</span>' +
+    '</div>' +
+    '<div class="standings-key" style="grid-column:1/-1;">' +
+      '<span><b>P</b>&nbsp;Played</span>' +
+      '<span><b>W</b>&nbsp;Wins (3 pts)</span>' +
+      '<span><b>D</b>&nbsp;Draws (1 pt)</span>' +
+      '<span><b>L</b>&nbsp;Losses (0 pts)</span>' +
+      '<span><b>GD</b>&nbsp;Goal Difference</span>' +
+      '<span><b>Pts</b>&nbsp;Total Points</span>' +
     '</div>';
   document.getElementById('group-grid').innerHTML = html;
 }
