@@ -237,6 +237,7 @@
 
 <script>
 let matchScores = {};
+let matchBroadcasts = {};
 let lastFetch = 0;
 
 async function fetchLiveScores() {
@@ -248,6 +249,7 @@ async function fetchLiveScores() {
     if (!res.ok) { console.warn('ESPN returned', res.status); return; }
     const data = await res.json();
     matchScores = {};
+    matchBroadcasts = {};
     (data.events || []).forEach(ev => {
       const comp = ev.competitions && ev.competitions[0];
       if (!comp) return;
@@ -268,14 +270,33 @@ async function fetchLiveScores() {
       const hN = normalize(h.team.displayName);
       const aN = normalize(a.team.displayName);
       matchScores[hN + '|' + aN] = rec;
-      matchScores[aN + '|' + hN] = rec;  // reversed for home/away flip tolerance
+      matchScores[aN + '|' + hN] = rec;
+      // Capture broadcast networks (FOX / FS1 / Telemundo)
+      const networks = [];
+      (comp.broadcasts || []).forEach(b => {
+        (b.names || []).forEach(n => { if (n && !networks.includes(n)) networks.push(n); });
+        if (b.shortName && !networks.includes(b.shortName)) networks.push(b.shortName);
+        if (b.network && !networks.includes(b.network)) networks.push(b.network);
+      });
+      // Also check geoBroadcasts which often has US channels with more detail
+      (comp.geoBroadcasts || []).forEach(gb => {
+        const n = (gb.media && gb.media.shortName) || (gb.station && gb.station.callLetters) || '';
+        if (n && !networks.includes(n)) networks.push(n);
+      });
+      if (networks.length) {
+        matchBroadcasts[hN + '|' + aN] = networks;
+        matchBroadcasts[aN + '|' + hN] = networks;
+      }
       if (h.team.shortDisplayName && a.team.shortDisplayName) {
         const hS = normalize(h.team.shortDisplayName);
         const aS = normalize(a.team.shortDisplayName);
         matchScores[hS + '|' + aS] = rec;
         matchScores[aS + '|' + hS] = rec;
+        if (networks.length) {
+          matchBroadcasts[hS + '|' + aS] = networks;
+          matchBroadcasts[aS + '|' + hS] = networks;
+        }
       }
-      // Also store under team abbreviations
       if (h.team.abbreviation && a.team.abbreviation) {
         matchScores[normalize(h.team.abbreviation) + '|' + normalize(a.team.abbreviation)] = rec;
         matchScores[normalize(a.team.abbreviation) + '|' + normalize(h.team.abbreviation)] = rec;
@@ -310,6 +331,33 @@ const NAME_MAP = {
   'cape verde': 'cabo verde',
   'cabo verde': 'cape verde',
 };
+
+function lookupByName(homeRaw, awayRaw, store) {
+  const stripEmoji = s => s.replace(/[\u{1F1E0}-\u{1FFFF}]/gu,'').replace(/🏴[\u{E0000}-\u{E007F}]+/gu,'').trim();
+  const variants = name => {
+    const base = normalize(stripEmoji(name));
+    const mapped = NAME_MAP[base];
+    const set = new Set([base]);
+    if (mapped) set.add(mapped);
+    const tokens = base.split(' ').filter(t => t.length >= 3);
+    tokens.forEach(t => set.add(t));
+    return [...set];
+  };
+  const hVars = variants(homeRaw);
+  const aVars = variants(awayRaw);
+  for (const h of hVars) for (const a of aVars) if (store[h + '|' + a]) return store[h + '|' + a];
+  for (const key in store) {
+    const [kh, ka] = key.split('|');
+    const hMatch = hVars.some(v => kh === v || kh.includes(v) || v.includes(kh));
+    const aMatch = aVars.some(v => ka === v || ka.includes(v) || v.includes(ka));
+    if (hMatch && aMatch) return store[key];
+  }
+  return null;
+}
+
+function getBroadcasts(homeRaw, awayRaw) {
+  return lookupByName(homeRaw, awayRaw, matchBroadcasts);
+}
 
 function getScore(homeRaw, awayRaw) {
   const stripEmoji = s => s.replace(/[\u{1F1E0}-\u{1FFFF}]/gu,'').replace(/🏴[\u{E0000}-\u{E007F}]+/gu,'').trim();
@@ -516,7 +564,28 @@ function matchCard(m) {
     '<div class="score-display">' + scoreDisplay(m) + '</div>' +
     '<div class="team away"><span>' + (isTBD?'TBD':teamName(m.away)) + '</span><span class="team-flag">' + teamFlag(m.away) + '</span></div>' +
     '</div>' +
-    '<div class="match-footer">' + m.channels.map(c=>'<span class="channel-badge ' + chClass(c) + '">' + c + '</span>').join('') +
+    '<div class="match-footer">' + (function(){
+      const live = getBroadcasts(m.home, m.away);
+      let chans = m.channels;
+      if (live && live.length) {
+        // Normalize ESPN broadcast names to our channel labels
+        const norm = new Set();
+        live.forEach(n => {
+          const s = String(n).toUpperCase();
+          if (s.includes('FOX SPORTS 1') || s === 'FS1' || s.includes('FOX SPORTS ONE')) norm.add('FS1');
+          else if (s === 'FOX' || s.match(/^FOX\\b/) || s.includes('FOX NETWORK') || s.includes('FOX BROADCAST')) norm.add('FOX');
+          else if (s.includes('TELEMUNDO')) norm.add('Telemundo');
+          else if (s.includes('UNIVERSO')) norm.add('Universo');
+          else if (s.includes('TUBI')) norm.add('Tubi');
+          else if (s.includes('PEACOCK')) norm.add('Peacock');
+        });
+        // Keep Telemundo from hardcoded if ESPN didn't list a Spanish channel
+        if (!norm.has('Telemundo') && !norm.has('Universo') && m.channels.includes('Telemundo')) norm.add('Telemundo');
+        if (m.channels.includes('Tubi') && !norm.has('Tubi')) norm.add('Tubi');
+        if (norm.size) chans = [...norm];
+      }
+      return chans.map(c => '<span class="channel-badge ' + chClass(c) + '">' + c + '</span>').join('');
+    })() +
     '<span class="venue"><i class="ti ti-map-pin" style="font-size:13px;"></i>' + m.venue + '</span></div></div>';
 }
 
