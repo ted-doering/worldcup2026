@@ -265,9 +265,20 @@ async function fetchLiveScores() {
         status: status,
         minute: (comp.status && comp.status.displayClock) || null
       };
-      matchScores[normalize(h.team.displayName) + '|' + normalize(a.team.displayName)] = rec;
+      const hN = normalize(h.team.displayName);
+      const aN = normalize(a.team.displayName);
+      matchScores[hN + '|' + aN] = rec;
+      matchScores[aN + '|' + hN] = rec;  // reversed for home/away flip tolerance
       if (h.team.shortDisplayName && a.team.shortDisplayName) {
-        matchScores[normalize(h.team.shortDisplayName) + '|' + normalize(a.team.shortDisplayName)] = rec;
+        const hS = normalize(h.team.shortDisplayName);
+        const aS = normalize(a.team.shortDisplayName);
+        matchScores[hS + '|' + aS] = rec;
+        matchScores[aS + '|' + hS] = rec;
+      }
+      // Also store under team abbreviations
+      if (h.team.abbreviation && a.team.abbreviation) {
+        matchScores[normalize(h.team.abbreviation) + '|' + normalize(a.team.abbreviation)] = rec;
+        matchScores[normalize(a.team.abbreviation) + '|' + normalize(h.team.abbreviation)] = rec;
       }
     });
     console.log('ESPN scores loaded:', Object.keys(matchScores).length, 'keys');
@@ -280,27 +291,54 @@ function normalize(s) {
   return (s || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
 }
 
+// Map of our names -> ESPN's preferred spelling (both directions handled by tokenizing).
 const NAME_MAP = {
   'united states': 'usa',
+  'usa': 'united states',
   'south korea': 'korea republic',
+  'korea republic': 'south korea',
   'czechia': 'czech republic',
+  'czech republic': 'czechia',
   'turkiye': 'turkey',
+  'turkey': 'turkiye',
   'ivory coast': 'cote divoire',
+  'cote divoire': 'ivory coast',
   'bosniaherzegovina': 'bosnia and herzegovina',
+  'bosnia and herzegovina': 'bosnia and herzegovina',
   'dr congo': 'congo dr',
+  'congo dr': 'dr congo',
+  'cape verde': 'cabo verde',
+  'cabo verde': 'cape verde',
 };
 
 function getScore(homeRaw, awayRaw) {
   const stripEmoji = s => s.replace(/[\u{1F1E0}-\u{1FFFF}]/gu,'').replace(/🏴[\u{E0000}-\u{E007F}]+/gu,'').trim();
-  let h = normalize(stripEmoji(homeRaw));
-  let a = normalize(stripEmoji(awayRaw));
-  h = NAME_MAP[h] || h;
-  a = NAME_MAP[a] || a;
-  if (matchScores[h + '|' + a]) return matchScores[h + '|' + a];
+  // Tokens for one of our names (e.g. "south korea" -> ["south","korea","south korea","korea republic"])
+  const variants = name => {
+    const base = normalize(stripEmoji(name));
+    const mapped = NAME_MAP[base];
+    const set = new Set([base]);
+    if (mapped) set.add(mapped);
+    // also try last word (e.g. "south korea" -> "korea")
+    const tokens = base.split(' ').filter(t => t.length >= 3);
+    tokens.forEach(t => set.add(t));
+    return [...set];
+  };
+  const hVars = variants(homeRaw);
+  const aVars = variants(awayRaw);
+  // Try exact pair matches (both ways) using each variant
+  for (const h of hVars) {
+    for (const a of aVars) {
+      if (matchScores[h + '|' + a]) return matchScores[h + '|' + a];
+    }
+  }
+  // Looser scan: a key matches if BOTH sides contain at least one variant of each
   for (const key in matchScores) {
     const parts = key.split('|');
     const kh = parts[0], ka = parts[1];
-    if ((kh.includes(h) || h.includes(kh)) && (ka.includes(a) || a.includes(ka))) return matchScores[key];
+    const hMatch = hVars.some(v => kh === v || kh.includes(v) || v.includes(kh));
+    const aMatch = aVars.some(v => ka === v || ka.includes(v) || v.includes(ka));
+    if (hMatch && aMatch) return matchScores[key];
   }
   return null;
 }
