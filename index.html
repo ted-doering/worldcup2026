@@ -611,7 +611,14 @@ function chClass(ch){
   if(ch==='Tubi') return 'ch-tubi';
   return 'ch-generic';
 }
-function teamName(raw) { return raw.replace(/[\u{1F1E0}-\u{1FFFF}]/gu,'').replace(/🏴[\u{E0000}-\u{E007F}]+/gu,'').trim(); }
+function teamName(raw) {
+  return raw
+    .replace(/🏴[\u{E0000}-\u{E007F}]+/gu, '')
+    .replace(/[\u{1F1E0}-\u{1FFFF}]/gu, '')
+    .replace(/[\u{E0000}-\u{E007F}]/gu, '')
+    .replace(/[\u{FE00}-\u{FE0F}]/gu, '')
+    .trim();
+}
 function teamFlag(raw) { const m = raw.match(/([\u{1F1E0}-\u{1FFFF}]{2}|🏴[\u{E0000}-\u{E007F}]+)/u); return m ? m[0] : ''; }
 
 function matchCard(m) {
@@ -739,7 +746,8 @@ async function filterByTeam(team){
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   await fetchLiveScores();
   await fetchMatchGoals();
-  const filtered = MATCHES.filter(m => m.home.includes(team) || m.away.includes(team));
+  const want = team.trim();
+  const filtered = MATCHES.filter(m => teamName(m.home) === want || teamName(m.away) === want);
   document.getElementById('schedule-list').innerHTML = renderList(filtered);
 }
 
