@@ -91,6 +91,11 @@
   .ch-tubi { background: var(--wc-orange); color: #fff; }
   .ch-generic { background: var(--bg2); color: var(--text2); border: 1px solid var(--border); }
   .venue { font-size: 12px; color: var(--text3); margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .goals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--text2); }
+  .goals-col { display: flex; flex-direction: column; gap: 3px; }
+  .goals-col.away { text-align: right; }
+  .goal-line { line-height: 1.5; }
+  .goal-min { color: var(--text3); font-weight: 600; margin-left: 2px; }
   .live-badge { background: var(--wc-magenta); color: #fff; font-size: 11px; padding: 3px 9px; border-radius: 10px; animation: pulse 1.5s infinite; display: inline-block; font-weight: 700; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
   .group-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
@@ -238,7 +243,10 @@
 <script>
 let matchScores = {};
 let matchBroadcasts = {};
+let matchEspnIds = {};   // name|name -> ESPN event id
+let matchGoals = {};     // ESPN event id -> [{minute, player, team:'home'|'away', type:'goal'|'own'|'pen'}]
 let lastFetch = 0;
+let lastGoalsFetch = 0;
 
 async function fetchLiveScores() {
   if (Date.now() - lastFetch < 55000) return;
@@ -250,6 +258,7 @@ async function fetchLiveScores() {
     const data = await res.json();
     matchScores = {};
     matchBroadcasts = {};
+    matchEspnIds = {};
     (data.events || []).forEach(ev => {
       const comp = ev.competitions && ev.competitions[0];
       if (!comp) return;
@@ -287,6 +296,9 @@ async function fetchLiveScores() {
         matchBroadcasts[hN + '|' + aN] = networks;
         matchBroadcasts[aN + '|' + hN] = networks;
       }
+      // Track ESPN event id under name keys for goal detail lookups
+      matchEspnIds[hN + '|' + aN] = ev.id;
+      matchEspnIds[aN + '|' + hN] = ev.id;
       if (h.team.shortDisplayName && a.team.shortDisplayName) {
         const hS = normalize(h.team.shortDisplayName);
         const aS = normalize(a.team.shortDisplayName);
@@ -310,6 +322,54 @@ async function fetchLiveScores() {
 
 function normalize(s) {
   return (s || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
+}
+
+// Fetch goal details for every match that has finished or is in progress.
+async function fetchMatchGoals() {
+  if (Date.now() - lastGoalsFetch < 55000) return;
+  lastGoalsFetch = Date.now();
+  // Collect unique ESPN ids for matches with a non-scheduled status
+  const idsToFetch = new Set();
+  for (const key in matchEspnIds) {
+    const sc = matchScores[key];
+    if (!sc) continue;
+    if (sc.status === 'SCHEDULED') continue;
+    idsToFetch.add(matchEspnIds[key]);
+  }
+  const results = await Promise.allSettled([...idsToFetch].map(id =>
+    fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=' + id)
+      .then(r => r.json())
+      .then(d => ({ id, data: d }))
+  ));
+  results.forEach(r => {
+    if (r.status !== 'fulfilled') return;
+    const { id, data } = r.value;
+    const comp = data.header && data.header.competitions && data.header.competitions[0];
+    if (!comp) return;
+    // Map ESPN team id -> 'home' or 'away'
+    const sideById = {};
+    (comp.competitors || []).forEach(c => { sideById[c.id] = c.homeAway; });
+    const plays = data.scoringPlays || data.keyEvents || [];
+    const goals = [];
+    plays.forEach(p => {
+      const typeText = ((p.type && p.type.text) || p.scoringType || '').toLowerCase();
+      if (!typeText.includes('goal')) return;
+      let kind = 'goal';
+      if (typeText.includes('own')) kind = 'own';
+      else if (typeText.includes('penalty')) kind = 'pen';
+      const ath = (p.athletesInvolved && p.athletesInvolved[0]) ||
+                  (p.participants && p.participants[0] && p.participants[0].athlete);
+      const player = ath ? (ath.displayName || ath.fullName || ath.shortName) : '';
+      const teamId = p.team && p.team.id;
+      const side = sideById[teamId] || 'home';
+      // minute can be in p.clock.displayValue, p.time, p.clock.value
+      let minute = (p.clock && (p.clock.displayValue || p.clock.value)) || p.time || '';
+      if (typeof minute === 'number') minute = minute + "'";
+      if (minute && !String(minute).includes("'")) minute = minute + "'";
+      goals.push({ minute, player, side, kind });
+    });
+    matchGoals[id] = goals;
+  });
 }
 
 // Map of our names -> ESPN's preferred spelling (both directions handled by tokenizing).
@@ -357,6 +417,11 @@ function lookupByName(homeRaw, awayRaw, store) {
 
 function getBroadcasts(homeRaw, awayRaw) {
   return lookupByName(homeRaw, awayRaw, matchBroadcasts);
+}
+
+function getMatchGoals(homeRaw, awayRaw) {
+  const id = lookupByName(homeRaw, awayRaw, matchEspnIds);
+  return id ? (matchGoals[id] || []) : [];
 }
 
 function getScore(homeRaw, awayRaw) {
@@ -568,7 +633,6 @@ function matchCard(m) {
       const live = getBroadcasts(m.home, m.away);
       let chans = m.channels;
       if (live && live.length) {
-        // Normalize ESPN broadcast names to our channel labels
         const norm = new Set();
         live.forEach(n => {
           const s = String(n).toUpperCase();
@@ -579,14 +643,29 @@ function matchCard(m) {
           else if (s.includes('TUBI')) norm.add('Tubi');
           else if (s.includes('PEACOCK')) norm.add('Peacock');
         });
-        // Keep Telemundo from hardcoded if ESPN didn't list a Spanish channel
         if (!norm.has('Telemundo') && !norm.has('Universo') && m.channels.includes('Telemundo')) norm.add('Telemundo');
         if (m.channels.includes('Tubi') && !norm.has('Tubi')) norm.add('Tubi');
         if (norm.size) chans = [...norm];
       }
       return chans.map(c => '<span class="channel-badge ' + chClass(c) + '">' + c + '</span>').join('');
     })() +
-    '<span class="venue"><i class="ti ti-map-pin" style="font-size:13px;"></i>' + m.venue + '</span></div></div>';
+    '<span class="venue"><i class="ti ti-map-pin" style="font-size:13px;"></i>' + m.venue + '</span></div>' +
+    (function(){
+      const goals = getMatchGoals(m.home, m.away);
+      if (!goals.length) return '';
+      // Split goals into home and away columns
+      const home = goals.filter(g => g.side === 'home');
+      const away = goals.filter(g => g.side === 'away');
+      const fmt = g => {
+        const icon = g.kind === 'own' ? '⚽(OG)' : g.kind === 'pen' ? '⚽(P)' : '⚽';
+        return '<div class="goal-line">' + icon + ' ' + (g.player || 'Unknown') + ' <span class="goal-min">' + (g.minute || '') + '</span></div>';
+      };
+      return '<div class="goals-grid">' +
+        '<div class="goals-col">' + home.map(fmt).join('') + '</div>' +
+        '<div class="goals-col away">' + away.map(fmt).join('') + '</div>' +
+      '</div>';
+    })() +
+    '</div>';
 }
 
 function renderList(matches) {
@@ -604,6 +683,7 @@ let currentFilter = 'upcoming';
 
 async function renderSchedule(filter){
   await fetchLiveScores();
+  await fetchMatchGoals();
   currentFilter = filter;
   const now = Date.now();
   let filtered;
@@ -658,6 +738,7 @@ async function filterByTeam(team){
   if(!team){ document.getElementById('btn-upcoming').click(); return; }
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   await fetchLiveScores();
+  await fetchMatchGoals();
   const filtered = MATCHES.filter(m => m.home.includes(team) || m.away.includes(team));
   document.getElementById('schedule-list').innerHTML = renderList(filtered);
 }
