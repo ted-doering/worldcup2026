@@ -137,6 +137,19 @@
   .info-card p { font-size: 14px; color: var(--text2); line-height: 1.6; }
   .api-notice { background: var(--bg2); border: 1.5px solid var(--border2); color: var(--text2); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; margin-bottom: 1rem; line-height: 1.5; }
   .api-notice a { color: var(--wc-magenta); font-weight: 600; }
+  .rank-table { width: 100%; border-collapse: collapse; }
+  .rank-table th { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); }
+  .rank-table th.center { text-align: center; }
+  .rank-table td { font-size: 14px; padding: 10px; border-bottom: 1px solid var(--border); }
+  .rank-table td.center { text-align: center; }
+  .rank-table tr:hover td { background: var(--bg2); }
+  .rank-num { font-weight: 800; font-size: 16px; background: linear-gradient(120deg, var(--wc-magenta), var(--wc-purple)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; width: 36px; }
+  .rank-team { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .rank-pts { font-weight: 700; color: var(--wc-purple); }
+  .rank-chg-up { color: #16a34a; font-weight: 600; }
+  .rank-chg-down { color: #dc2626; font-weight: 600; }
+  .rank-chg-same { color: var(--text3); }
+  .rank-wc { display: inline-block; margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--wc-teal); color: #fff; font-weight: 700; vertical-align: middle; }
   .scorer-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
   .scorer-rank { font-size: 18px; font-weight: 800; width: 32px; text-align: center; background: linear-gradient(120deg, var(--wc-magenta), var(--wc-purple)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
   .scorer-info { flex: 1; min-width: 0; }
@@ -166,6 +179,7 @@
     <button class="tab" onclick="showTab('groups',this)"><i class="ti ti-layout-grid"></i> Groups</button>
     <button class="tab" onclick="showTab('stats',this)"><i class="ti ti-user-search"></i> Player Stats</button>
     <button class="tab" onclick="showTab('scorers',this)"><i class="ti ti-trophy"></i> Top Scorers</button>
+    <button class="tab" onclick="showTab('rankings',this)"><i class="ti ti-list-numbers"></i> World Rankings</button>
     <button class="tab" onclick="showTab('watch',this)"><i class="ti ti-device-tv"></i> How to Watch</button>
   </div>
 
@@ -212,6 +226,13 @@
     <p class="section-title">🏆 Golden Boot race</p>
     <p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">Live top scorers from across the tournament, powered by ESPN.</p>
     <div id="scorers-list"><p style="color:var(--text3);font-size:14px;" class="loading-dots">Loading top scorers</p></div>
+  </div>
+
+  <div id="tab-rankings" class="section">
+    <p class="section-title">🌍 FIFA/Coca-Cola Men's World Ranking</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:2px;">Last official update: 11 June 2026 · Next update: 20 July 2026</p>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:1rem;">Source: FIFA. Showing all 48 World Cup teams.</p>
+    <div id="rankings-list"></div>
   </div>
 
   <div id="tab-watch" class="section">
@@ -940,6 +961,7 @@ function showTab(name, btn){
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
   if (name === 'scorers') renderScorers();
+  if (name === 'rankings') renderRankings();
   if (name === 'groups') renderGroups();
 }
 
@@ -981,6 +1003,83 @@ async function doSearch(){
   } catch(e) {
     res.innerHTML = '<p style="color:var(--wc-magenta);">Could not load player info. Please try again.</p>';
   }
+}
+
+// ── FIFA World Ranking (official, 11 June 2026) ───────────────────────
+// Categories match FIFA's table: Rank, Team, Points, change since last update.
+const FIFA_RANKINGS = [
+  {r:1,n:'Argentina',f:'🇦🇷',p:1885.36,c:0},
+  {r:2,n:'Spain',f:'🇪🇸',p:1875.37,c:0},
+  {r:3,n:'France',f:'🇫🇷',p:1862.71,c:0},
+  {r:4,n:'England',f:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',p:1824.30,c:0},
+  {r:5,n:'Portugal',f:'🇵🇹',p:1778.36,c:1},
+  {r:6,n:'Brazil',f:'🇧🇷',p:1776.03,c:-1},
+  {r:7,n:'Netherlands',f:'🇳🇱',p:1759.96,c:0},
+  {r:8,n:'Belgium',f:'🇧🇪',p:1740.01,c:0},
+  {r:9,n:'Germany',f:'🇩🇪',p:1716.98,c:1},
+  {r:10,n:'Croatia',f:'🇭🇷',p:1707.18,c:-1},
+  {r:11,n:'Italy',f:'🇮🇹',p:1702.06,c:0},
+  {r:12,n:'Morocco',f:'🇲🇦',p:1694.24,c:0},
+  {r:13,n:'Colombia',f:'🇨🇴',p:1690.40,c:1},
+  {r:14,n:'Mexico',f:'🇲🇽',p:1682.51,c:1},
+  {r:15,n:'Uruguay',f:'🇺🇾',p:1679.49,c:-2},
+  {r:16,n:'USA',f:'🇺🇸',p:1665.92,c:-1},
+  {r:17,n:'Switzerland',f:'🇨🇭',p:1648.14,c:0},
+  {r:18,n:'Senegal',f:'🇸🇳',p:1646.50,c:1},
+  {r:19,n:'Japan',f:'🇯🇵',p:1641.21,c:-1},
+  {r:20,n:'Denmark',f:'🇩🇰',p:1633.78,c:0},
+  {r:21,n:'Iran',f:'🇮🇷',p:1618.07,c:0},
+  {r:22,n:'Korea Republic',f:'🇰🇷',p:1575.00,c:1},
+  {r:23,n:'Australia',f:'🇦🇺',p:1573.05,c:-1},
+  {r:24,n:'Ecuador',f:'🇪🇨',p:1571.21,c:0},
+  {r:25,n:'Austria',f:'🇦🇹',p:1566.27,c:0},
+  {r:26,n:'Ukraine',f:'🇺🇦',p:1546.78,c:0},
+  {r:27,n:'Sweden',f:'🇸🇪',p:1536.05,c:0},
+  {r:28,n:'Türkiye',f:'🇹🇷',p:1533.55,c:0},
+  {r:29,n:'Wales',f:'🏴󠁧󠁢󠁷󠁬󠁳󠁿',p:1525.93,c:0},
+  {r:30,n:'Canada',f:'🇨🇦',p:1521.61,c:0},
+  {r:31,n:'Egypt',f:'🇪🇬',p:1518.79,c:0},
+  {r:32,n:'Panama',f:'🇵🇦',p:1517.66,c:0},
+  {r:33,n:'Norway',f:'🇳🇴',p:1516.18,c:1},
+  {r:34,n:'Nigeria',f:'🇳🇬',p:1511.42,c:-1},
+  {r:35,n:'Ivory Coast',f:'🇨🇮',p:1505.34,c:0},
+  {r:36,n:'Algeria',f:'🇩🇿',p:1500.81,c:0},
+  {r:37,n:'Scotland',f:'🏴󠁧󠁢󠁳󠁣󠁴󠁿',p:1498.66,c:0},
+  {r:38,n:'Paraguay',f:'🇵🇾',p:1488.20,c:0},
+  {r:41,n:'Tunisia',f:'🇹🇳',p:1476.20,c:0},
+  {r:42,n:'Czechia',f:'🇨🇿',p:1472.65,c:0},
+  {r:51,n:'Qatar',f:'🇶🇦',p:1429.65,c:0},
+  {r:54,n:'Saudi Arabia',f:'🇸🇦',p:1418.96,c:0},
+  {r:58,n:'South Africa',f:'🇿🇦',p:1404.96,c:0},
+  {r:59,n:'Uzbekistan',f:'🇺🇿',p:1437.02,c:0},
+  {r:60,n:'Iraq',f:'🇮🇶',p:1396.05,c:0},
+  {r:62,n:'Jordan',f:'🇯🇴',p:1389.20,c:0},
+  {r:64,n:'Cape Verde',f:'🇨🇻',p:1382.59,c:0},
+  {r:70,n:'DR Congo',f:'🇨🇩',p:1356.10,c:0},
+  {r:73,n:'Ghana',f:'🇬🇭',p:1343.20,c:0},
+  {r:76,n:'New Zealand',f:'🇳🇿',p:1320.32,c:0},
+  {r:80,n:'Haiti',f:'🇭🇹',p:1299.50,c:0},
+  {r:82,n:'Bosnia-Herzegovina',f:'🇧🇦',p:1288.45,c:0},
+  {r:87,n:'Curaçao',f:'🇨🇼',p:1265.00,c:0},
+];
+
+function renderRankings(){
+  const el = document.getElementById('rankings-list');
+  const rows = FIFA_RANKINGS.map(t => {
+    let chg;
+    if (t.c > 0) chg = '<span class="rank-chg-up">▲ ' + t.c + '</span>';
+    else if (t.c < 0) chg = '<span class="rank-chg-down">▼ ' + Math.abs(t.c) + '</span>';
+    else chg = '<span class="rank-chg-same">–</span>';
+    return '<tr>' +
+      '<td class="rank-num">' + t.r + '</td>' +
+      '<td><span class="rank-team"><span style="font-size:18px;">' + t.f + '</span>' + t.n + '</span></td>' +
+      '<td class="center"><span class="rank-pts">' + t.p.toFixed(2) + '</span></td>' +
+      '<td class="center">' + chg + '</td>' +
+    '</tr>';
+  }).join('');
+  el.innerHTML = '<table class="rank-table"><thead><tr>' +
+    '<th>Rank</th><th>Team</th><th class="center">Points</th><th class="center">+/-</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 // ── Top scorers via ESPN ──────────────────────────────────────────────
