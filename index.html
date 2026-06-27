@@ -313,11 +313,17 @@ async function fetchLiveScores() {
       const h = (comp.competitors||[]).find(c => c.homeAway === 'home');
       const a = (comp.competitors||[]).find(c => c.homeAway === 'away');
       if (!h || !a) return;
+      // Ensure team objects exist (knockout TBD slots may have none)
+      if (!h.team) h.team = {};
+      if (!a.team) a.team = {};
+      const hasHomeTeam = !!(h.team.displayName);
+      const hasAwayTeam = !!(a.team.displayName);
       const st = (comp.status && comp.status.type && comp.status.type.name) || '';
       let status = 'SCHEDULED';
       if (st === 'STATUS_IN_PROGRESS' || st === 'STATUS_FIRST_HALF' || st === 'STATUS_SECOND_HALF') status = 'IN_PLAY';
       else if (st === 'STATUS_HALFTIME') status = 'PAUSED';
       else if (st === 'STATUS_FINAL' || st === 'STATUS_FULL_TIME') status = 'FINISHED';
+      try {
       const rec = {
         home: h.score !== undefined ? parseInt(h.score) : null,
         away: a.score !== undefined ? parseInt(a.score) : null,
@@ -377,10 +383,18 @@ async function fetchLiveScores() {
         }
       }
       const venueName = (comp.venue && (comp.venue.fullName || (comp.venue.address && comp.venue.address.city))) || 'TBD';
-      const hName = (homeInfo.display || h.team.displayName) + (homeInfo.flag ? ' ' + homeInfo.flag : '');
-      const aName = (awayInfo.display || a.team.displayName) + (awayInfo.flag ? ' ' + awayInfo.flag : '');
+      const descr = (c) => {
+        // ESPN sometimes provides a placeholder description for undetermined teams
+        return (c.team && (c.team.displayName || c.team.shortDisplayName)) ||
+               (c.note) || (c.team && c.team.abbreviation) || 'TBD';
+      };
+      const hRawName = hasHomeTeam ? h.team.displayName : descr(h);
+      const aRawName = hasAwayTeam ? a.team.displayName : descr(a);
+      const hName = hasHomeTeam ? ((homeInfo.display || hRawName) + (homeInfo.flag ? ' ' + homeInfo.flag : '')) : hRawName;
+      const aName = hasAwayTeam ? ((awayInfo.display || aRawName) + (awayInfo.flag ? ' ' + awayInfo.flag : '')) : aRawName;
       const isUsa = /united states|usa/i.test(h.team.displayName + a.team.displayName);
       espnFixtures.push({ utc: ev.date, group: grp, home: hName, away: aName, venue: venueName, channels: [], usa: isUsa, _id: ev.id });
+      } catch(err) { console.warn('Skip event parse:', err && err.message); }
       if (h.team.shortDisplayName && a.team.shortDisplayName) {
         const hS = normalize(h.team.shortDisplayName);
         const aS = normalize(a.team.shortDisplayName);
