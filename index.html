@@ -137,6 +137,22 @@
   .info-card p { font-size: 14px; color: var(--text2); line-height: 1.6; }
   .api-notice { background: var(--bg2); border: 1.5px solid var(--border2); color: var(--text2); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; margin-bottom: 1rem; line-height: 1.5; }
   .api-notice a { color: var(--wc-magenta); font-weight: 600; }
+  .bracket { display: flex; gap: 16px; min-width: max-content; align-items: stretch; }
+  .bracket-round { display: flex; flex-direction: column; justify-content: space-around; gap: 10px; min-width: 180px; }
+  .bracket-round-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--wc-purple); text-align: center; margin-bottom: 6px; position: sticky; top: 0; }
+  .bracket-match { background: var(--bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+  .bracket-match.live { border-color: var(--wc-magenta); box-shadow: 0 0 0 1px var(--wc-magenta); }
+  .bracket-match.done { opacity: 0.95; }
+  .bm-team { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 0; }
+  .bm-team .nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .bm-team .nm span.flag { font-size: 15px; }
+  .bm-team .sc { font-weight: 800; font-size: 14px; min-width: 18px; text-align: right; }
+  .bm-team.win .nm { font-weight: 700; }
+  .bm-team.win .sc { color: var(--wc-teal); }
+  .bm-team.lose { color: var(--text3); }
+  .bm-sep { height: 1px; background: var(--border); margin: 2px 0; }
+  .bm-meta { font-size: 10px; color: var(--text3); margin-top: 4px; text-align: center; }
+  .bracket-final .bracket-match { border-color: var(--wc-orange); background: linear-gradient(135deg, rgba(247,148,30,0.08), transparent); }
   .rank-table { width: 100%; border-collapse: collapse; }
   .rank-table th { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); }
   .rank-table th.center { text-align: center; }
@@ -180,6 +196,7 @@
     <button class="tab" onclick="showTab('stats',this)"><i class="ti ti-user-search"></i> Player Stats</button>
     <button class="tab" onclick="showTab('scorers',this)"><i class="ti ti-trophy"></i> Top Scorers</button>
     <button class="tab" onclick="showTab('rankings',this)"><i class="ti ti-list-numbers"></i> World Rankings</button>
+    <button class="tab" onclick="showTab('bracket',this)"><i class="ti ti-tournament"></i> Bracket</button>
     <button class="tab" onclick="showTab('watch',this)"><i class="ti ti-device-tv"></i> How to Watch</button>
   </div>
 
@@ -233,6 +250,14 @@
     <p style="font-size:13px;color:var(--text2);margin-bottom:2px;">Last official update: 11 June 2026 · Next update: 20 July 2026</p>
     <p style="font-size:12px;color:var(--text3);margin-bottom:1rem;">Source: FIFA. Showing all 48 World Cup teams.</p>
     <div id="rankings-list"></div>
+  </div>
+
+  <div id="tab-bracket" class="section">
+    <p class="section-title">🏆 Knockout Bracket</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:1rem;">Round of 32 → Final. Teams and scores fill in live from ESPN as the knockouts progress.</p>
+    <div id="bracket-scroll" style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px;">
+      <div id="bracket-list"></div>
+    </div>
   </div>
 
   <div id="tab-watch" class="section">
@@ -969,6 +994,7 @@ function showTab(name, btn){
   btn.classList.add('active');
   if (name === 'scorers') renderScorers();
   if (name === 'rankings') renderRankings();
+  if (name === 'bracket') { fetchLiveScores().then(renderBracket); }
   if (name === 'groups') renderGroups();
 }
 
@@ -1069,6 +1095,68 @@ const FIFA_RANKINGS = [
   {r:82,n:'Bosnia-Herzegovina',f:'🇧🇦',p:1288.45,c:0},
   {r:87,n:'Curaçao',f:'🇨🇼',p:1265.00,c:0},
 ];
+
+function renderBracket(){
+  const el = document.getElementById('bracket-list');
+  const rounds = [
+    {key:'R32', title:'Round of 32'},
+    {key:'R16', title:'Round of 16'},
+    {key:'QF', title:'Quarterfinals'},
+    {key:'SF', title:'Semifinals'},
+    {key:'Final', title:'Final'},
+  ];
+  // Use live ESPN fixtures if available, else hardcoded knockout placeholders
+  const src = (espnFixtures && espnFixtures.length >= 40) ? espnFixtures : MATCHES;
+  // collect knockout matches by round
+  const byRound = {};
+  rounds.forEach(r => byRound[r.key] = []);
+  src.forEach(m => {
+    let g = m.group;
+    if (g === 'KO') return; // unassigned
+    if (g === '3rd') return; // show 3rd place separately if desired
+    if (byRound[g]) byRound[g].push(m);
+  });
+  // sort each round by date
+  rounds.forEach(r => byRound[r.key].sort((a,b)=> new Date(a.utc)-new Date(b.utc)));
+
+  const teamCell = (raw, score, won, lost) => {
+    const nm = (raw === 'TBD' || !raw) ? '<span style="color:var(--text3);">TBD</span>'
+      : '<span class="flag">' + teamFlag(raw) + '</span>' + teamName(raw);
+    const cls = 'bm-team' + (won ? ' win' : '') + (lost ? ' lose' : '');
+    return '<div class="' + cls + '"><span class="nm">' + nm + '</span><span class="sc">' + (score !== null && score !== undefined ? score : '') + '</span></div>';
+  };
+
+  let html = '<div class="bracket">';
+  rounds.forEach(r => {
+    const matches = byRound[r.key];
+    html += '<div class="bracket-round' + (r.key==='Final'?' bracket-final':'') + '">';
+    html += '<div class="bracket-round-title">' + r.title + '</div>';
+    if (!matches.length) {
+      html += '<div class="bracket-match"><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div><div class="bm-sep"></div><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div></div>';
+    } else {
+      matches.forEach(m => {
+        const sc = getScore(m.home, m.away);
+        const live = sc && (sc.status==='IN_PLAY'||sc.status==='PAUSED');
+        const done = sc && sc.status==='FINISHED';
+        let hWon=false,aWon=false,hLost=false,aLost=false;
+        if (done && sc.home!=null && sc.away!=null) {
+          if (sc.home>sc.away){hWon=true;aLost=true;}
+          else if (sc.away>sc.home){aWon=true;hLost=true;}
+        }
+        const cls = 'bracket-match' + (live?' live':'') + (done?' done':'');
+        html += '<div class="' + cls + '">' +
+          teamCell(m.home, sc?sc.home:null, hWon, hLost) +
+          '<div class="bm-sep"></div>' +
+          teamCell(m.away, sc?sc.away:null, aWon, aLost) +
+          '<div class="bm-meta">' + localDay(m.utc) + (live?' · LIVE':done?' · FT':'') + '</div>' +
+        '</div>';
+      });
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
 
 function renderRankings(){
   const el = document.getElementById('rankings-list');
