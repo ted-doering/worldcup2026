@@ -498,6 +498,28 @@ function getMatchGoals(homeRaw, awayRaw) {
   return id ? (matchGoals[id] || []) : [];
 }
 
+// Resolve display channels for a match: prefer live ESPN broadcasts, else hardcoded.
+function resolveChannels(m) {
+  const live = getBroadcasts(m.home, m.away);
+  let chans = m.channels || [];
+  if (live && live.length) {
+    const norm = new Set();
+    live.forEach(n => {
+      const s = String(n).toUpperCase();
+      if (s.includes('FOX SPORTS 1') || s === 'FS1' || s.includes('FOX SPORTS ONE')) norm.add('FS1');
+      else if (s === 'FOX' || s.match(/^FOX\b/) || s.includes('FOX NETWORK') || s.includes('FOX BROADCAST')) norm.add('FOX');
+      else if (s.includes('TELEMUNDO')) norm.add('Telemundo');
+      else if (s.includes('UNIVERSO')) norm.add('Universo');
+      else if (s.includes('TUBI')) norm.add('Tubi');
+      else if (s.includes('PEACOCK')) norm.add('Peacock');
+    });
+    if (chans.includes('Telemundo') && !norm.has('Telemundo') && !norm.has('Universo')) norm.add('Telemundo');
+    if (chans.includes('Tubi') && !norm.has('Tubi')) norm.add('Tubi');
+    if (norm.size) chans = [...norm];
+  }
+  return chans;
+}
+
 function getScore(homeRaw, awayRaw) {
   const stripEmoji = s => s.replace(/[\u{1F1E0}-\u{1FFFF}]/gu,'').replace(/🏴[\u{E0000}-\u{E007F}]+/gu,'').trim();
   // Tokens for one of our names (e.g. "south korea" -> ["south","korea","south korea","korea republic"])
@@ -1140,7 +1162,13 @@ function renderBracket(){
       teamCell(m.home, sc?sc.home:null, hWon, hLost) +
       '<div class="bm-sep"></div>' +
       teamCell(m.away, sc?sc.away:null, aWon, aLost) +
-      '<div class="bm-meta">' + localDay(m.utc) + (live?' · LIVE':done?' · FT':'') + '</div>' +
+      '<div class="bm-meta">' + (function(){
+        const chans = resolveChannels(m);
+        const eng = chans.find(c => c==='FOX' || c==='FS1') || chans[0] || '';
+        const when = localDay(m.utc) + ' · ' + localTime(m.utc);
+        const status = live ? ' · LIVE' : (done ? ' · FT' : '');
+        return when + (eng ? ' · ' + eng : '') + status;
+      })() + '</div>' +
     '</div>';
   };
 
