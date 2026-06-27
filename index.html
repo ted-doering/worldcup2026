@@ -291,6 +291,7 @@ let matchScores = {};
 let matchBroadcasts = {};
 let matchEspnIds = {};   // name|name -> ESPN event id
 let espnFixtures = [];   // full schedule built live from ESPN (authoritative)
+let matchEventGoals = {}; // name|name -> [{minute,player,side,kind}] from scoreboard details
 let matchGoals = {};     // ESPN event id -> [{minute, player, team:'home'|'away', type:'goal'|'own'|'pen'}]
 let lastFetch = 0;
 let lastGoalsFetch = 0;
@@ -306,6 +307,7 @@ async function fetchLiveScores() {
     matchScores = {};
     matchBroadcasts = {};
     matchEspnIds = {};
+    matchEventGoals = {};
     espnFixtures = [];
     (data.events || []).forEach(ev => {
       const comp = ev.competitions && ev.competitions[0];
@@ -334,6 +336,29 @@ async function fetchLiveScores() {
       const aN = normalize(a.team.displayName);
       matchScores[hN + '|' + aN] = rec;
       matchScores[aN + '|' + hN] = rec;
+
+      // Extract goal scorers directly from the scoreboard 'details' array
+      const homeId = h.team.id, awayId = a.team.id;
+      const goals = [];
+      (comp.details || []).forEach(d => {
+        if (d.scoringPlay !== true) return;       // only actual goals
+        let kind = 'goal';
+        if (d.ownGoal === true) kind = 'own';
+        else if (d.penaltyKick === true) kind = 'pen';
+        else if (d.shootout === true) kind = 'so';
+        const ath = d.athletesInvolved && d.athletesInvolved[0];
+        const player = ath ? (ath.displayName || ath.fullName || ath.shortName) : '';
+        const tId = d.team && d.team.id;
+        // For own goals ESPN credits the scoring side via team id; place on the team that benefited
+        let side = (tId === homeId) ? 'home' : (tId === awayId) ? 'away' : 'home';
+        if (kind === 'own') side = (side === 'home') ? 'away' : 'home'; // own goal counts for the other side
+        const minute = (d.clock && d.clock.displayValue) || '';
+        goals.push({ minute, player, side, kind });
+      });
+      if (goals.length) {
+        matchEventGoals[hN + '|' + aN] = goals;
+        matchEventGoals[aN + '|' + hN] = goals.map(g => ({...g, side: g.side==='home'?'away':'home'}));
+      }
       // Capture broadcast networks (FOX / FS1 / Telemundo)
       const networks = [];
       (comp.broadcasts || []).forEach(b => {
@@ -422,54 +447,9 @@ function normalize(s) {
 
 // Fetch goal details for every match that has finished or is in progress.
 async function fetchMatchGoals() {
-  if (Date.now() - lastGoalsFetch < 55000) return;
-  lastGoalsFetch = Date.now();
-  // Collect unique ESPN ids for matches with a non-scheduled status
-  const idsToFetch = new Set();
-  for (const key in matchEspnIds) {
-    const sc = matchScores[key];
-    if (!sc) continue;
-    if (sc.status === 'SCHEDULED') continue;
-    idsToFetch.add(matchEspnIds[key]);
-  }
-  const results = await Promise.allSettled([...idsToFetch].map(id =>
-    fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=' + id)
-      .then(r => r.json())
-      .then(d => ({ id, data: d }))
-  ));
-  results.forEach(r => {
-    if (r.status !== 'fulfilled') return;
-    const { id, data } = r.value;
-    const comp = data.header && data.header.competitions && data.header.competitions[0];
-    if (!comp) return;
-    // Map ESPN team id -> 'home' or 'away'
-    const sideById = {};
-    (comp.competitors || []).forEach(c => { sideById[c.id] = c.homeAway; });
-    const plays = data.scoringPlays || data.keyEvents || [];
-    const goals = [];
-    plays.forEach(p => {
-      const typeText = ((p.type && p.type.text) || p.scoringType || (p.type && p.type.abbreviation) || '').toLowerCase();
-      const isPenaltyFlag = p.penaltyKick === true || p.scoringPlay === true && typeText.includes('pen');
-      // A scoring play counts if it's a goal, a penalty, or flagged as scoring
-      const looksLikeGoal = typeText.includes('goal') || typeText.includes('penalty') || typeText.includes('pen ') || isPenaltyFlag;
-      if (!looksLikeGoal) return;
-      let kind = 'goal';
-      if (typeText.includes('own')) kind = 'own';
-      else if (typeText.includes('penalty') || typeText.includes('pen ') || isPenaltyFlag || (p.shootout === true)) kind = 'pen';
-      if (p.shootout === true) kind = 'so';  // penalty shootout
-      const ath = (p.athletesInvolved && p.athletesInvolved[0]) ||
-                  (p.participants && p.participants[0] && p.participants[0].athlete);
-      const player = ath ? (ath.displayName || ath.fullName || ath.shortName) : '';
-      const teamId = p.team && p.team.id;
-      const side = sideById[teamId] || 'home';
-      // minute can be in p.clock.displayValue, p.time, p.clock.value
-      let minute = (p.clock && (p.clock.displayValue || p.clock.value)) || p.time || '';
-      if (typeof minute === 'number') minute = minute + "'";
-      if (minute && !String(minute).includes("'")) minute = minute + "'";
-      goals.push({ minute, player, side, kind });
-    });
-    matchGoals[id] = goals;
-  });
+  // Goals are now extracted directly from the scoreboard feed in fetchLiveScores,
+  // so no extra per-match summary requests are needed. Kept as a no-op for callers.
+  return;
 }
 
 // Map of our names -> ESPN's preferred spelling (both directions handled by tokenizing).
@@ -520,6 +500,9 @@ function getBroadcasts(homeRaw, awayRaw) {
 }
 
 function getMatchGoals(homeRaw, awayRaw) {
+  // Prefer scoreboard-derived goals (reliable); fall back to summary-derived if present
+  const g = lookupByName(homeRaw, awayRaw, matchEventGoals);
+  if (g && g.length) return g;
   const id = lookupByName(homeRaw, awayRaw, matchEspnIds);
   return id ? (matchGoals[id] || []) : [];
 }
