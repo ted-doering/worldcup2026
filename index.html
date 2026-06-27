@@ -397,11 +397,15 @@ async function fetchMatchGoals() {
     const plays = data.scoringPlays || data.keyEvents || [];
     const goals = [];
     plays.forEach(p => {
-      const typeText = ((p.type && p.type.text) || p.scoringType || '').toLowerCase();
-      if (!typeText.includes('goal')) return;
+      const typeText = ((p.type && p.type.text) || p.scoringType || (p.type && p.type.abbreviation) || '').toLowerCase();
+      const isPenaltyFlag = p.penaltyKick === true || p.scoringPlay === true && typeText.includes('pen');
+      // A scoring play counts if it's a goal, a penalty, or flagged as scoring
+      const looksLikeGoal = typeText.includes('goal') || typeText.includes('penalty') || typeText.includes('pen ') || isPenaltyFlag;
+      if (!looksLikeGoal) return;
       let kind = 'goal';
       if (typeText.includes('own')) kind = 'own';
-      else if (typeText.includes('penalty')) kind = 'pen';
+      else if (typeText.includes('penalty') || typeText.includes('pen ') || isPenaltyFlag || (p.shootout === true)) kind = 'pen';
+      if (p.shootout === true) kind = 'so';  // penalty shootout
       const ath = (p.athletesInvolved && p.athletesInvolved[0]) ||
                   (p.participants && p.participants[0] && p.participants[0].athlete);
       const player = ath ? (ath.displayName || ath.fullName || ath.shortName) : '';
@@ -742,7 +746,10 @@ function matchCard(m) {
       const home = goals.filter(g => g.side === 'home');
       const away = goals.filter(g => g.side === 'away');
       const fmt = g => {
-        const icon = g.kind === 'own' ? '⚽(OG)' : g.kind === 'pen' ? '⚽(P)' : '⚽';
+        let icon = '⚽';
+        if (g.kind === 'own') icon = '⚽ (OG)';
+        else if (g.kind === 'pen') icon = '⚽ (PK)';
+        else if (g.kind === 'so') icon = '🥅 (PK)';
         return '<div class="goal-line">' + icon + ' ' + (g.player || 'Unknown') + ' <span class="goal-min">' + (g.minute || '') + '</span></div>';
       };
       return '<div class="goals-grid">' +
