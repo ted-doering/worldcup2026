@@ -352,17 +352,29 @@ async function fetchLiveScores() {
       const homeInfo = lookupTeam(h.team.displayName);
       const awayInfo = lookupTeam(a.team.displayName);
       let grp = (homeInfo.group && homeInfo.group === awayInfo.group) ? homeInfo.group : '';
-      // Determine round for knockouts from ESPN notes/type
+      // Knockout? Assign round by DATE (fixed FIFA windows) — robust vs ESPN labels.
       if (!grp) {
-        const note = (comp.notes && comp.notes[0] && comp.notes[0].headline) || (ev.season && ev.season.slug) || '';
+        const d = new Date(ev.date);
+        const md = (d.getUTCMonth()+1) * 100 + d.getUTCDate(); // e.g. July 5 -> 705
+        // First try ESPN's own text label
+        const note = (comp.notes && comp.notes[0] && comp.notes[0].headline) || '';
         const txt = (note + ' ' + (ev.name||'')).toLowerCase();
-        if (txt.includes('final') && !txt.includes('semi') && !txt.includes('quarter')) grp = 'Final';
-        else if (txt.includes('third') || txt.includes('3rd')) grp = '3rd';
-        else if (txt.includes('semi')) grp = 'SF';
-        else if (txt.includes('quarter')) grp = 'QF';
+        if (txt.includes('round of 32')) grp = 'R32';
         else if (txt.includes('round of 16')) grp = 'R16';
-        else if (txt.includes('round of 32')) grp = 'R32';
-        else grp = 'KO';
+        else if (txt.includes('quarter')) grp = 'QF';
+        else if (txt.includes('semi')) grp = 'SF';
+        else if (txt.includes('third') || txt.includes('3rd') || txt.includes('place')) grp = '3rd';
+        else if (txt.includes('final')) grp = 'Final';
+        // Fall back to date windows (UTC dates; games spill to next-day UTC)
+        if (!grp) {
+          if (md >= 628 && md <= 704) grp = 'R32';       // Jun 28 - Jul 3 (to Jul 4 UTC)
+          else if (md >= 705 && md <= 708) grp = 'R16';   // Jul 4 - Jul 7
+          else if (md >= 709 && md <= 712) grp = 'QF';    // Jul 9 - Jul 11
+          else if (md >= 714 && md <= 716) grp = 'SF';    // Jul 14 - Jul 15
+          else if (md === 718) grp = '3rd';              // Jul 18 bronze
+          else if (md === 719 || md === 720) grp = 'Final'; // Jul 19
+          else grp = 'KO';
+        }
       }
       const venueName = (comp.venue && (comp.venue.fullName || (comp.venue.address && comp.venue.address.city))) || 'TBD';
       const hName = (homeInfo.display || h.team.displayName) + (homeInfo.flag ? ' ' + homeInfo.flag : '');
