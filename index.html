@@ -1098,59 +1098,60 @@ const FIFA_RANKINGS = [
 
 function renderBracket(){
   const el = document.getElementById('bracket-list');
-  const rounds = [
-    {key:'R32', title:'Round of 32'},
-    {key:'R16', title:'Round of 16'},
-    {key:'QF', title:'Quarterfinals'},
-    {key:'SF', title:'Semifinals'},
-    {key:'Final', title:'Final'},
+  // Fixed bracket scaffold: correct slot counts per round
+  const ROUNDS = [
+    {key:'R32', title:'Round of 32', slots:16},
+    {key:'R16', title:'Round of 16', slots:8},
+    {key:'QF',  title:'Quarterfinals', slots:4},
+    {key:'SF',  title:'Semifinals', slots:2},
+    {key:'Final', title:'Final', slots:1},
   ];
-  // Use live ESPN fixtures if available, else hardcoded knockout placeholders
+  // Pull knockout fixtures from the live source, grouped by round
   const src = (espnFixtures && espnFixtures.length >= 40) ? espnFixtures : MATCHES;
-  // collect knockout matches by round
-  const byRound = {};
-  rounds.forEach(r => byRound[r.key] = []);
+  const byRound = {R32:[],R16:[],QF:[],SF:[],Final:[]};
   src.forEach(m => {
-    let g = m.group;
-    if (g === 'KO') return; // unassigned
-    if (g === '3rd') return; // show 3rd place separately if desired
-    if (byRound[g]) byRound[g].push(m);
+    if (byRound[m.group]) byRound[m.group].push(m);
   });
-  // sort each round by date
-  rounds.forEach(r => byRound[r.key].sort((a,b)=> new Date(a.utc)-new Date(b.utc)));
+  Object.keys(byRound).forEach(k => byRound[k].sort((a,b)=> new Date(a.utc)-new Date(b.utc)));
 
   const teamCell = (raw, score, won, lost) => {
-    const nm = (raw === 'TBD' || !raw) ? '<span style="color:var(--text3);">TBD</span>'
+    const isTBD = (raw === 'TBD' || !raw);
+    const nm = isTBD ? '<span style="color:var(--text3);">TBD</span>'
       : '<span class="flag">' + teamFlag(raw) + '</span>' + teamName(raw);
     const cls = 'bm-team' + (won ? ' win' : '') + (lost ? ' lose' : '');
-    return '<div class="' + cls + '"><span class="nm">' + nm + '</span><span class="sc">' + (score !== null && score !== undefined ? score : '') + '</span></div>';
+    const sc = (score !== null && score !== undefined) ? score : '';
+    return '<div class="' + cls + '"><span class="nm">' + nm + '</span><span class="sc">' + sc + '</span></div>';
+  };
+
+  const matchBox = (m) => {
+    if (!m) {
+      return '<div class="bracket-match"><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div><div class="bm-sep"></div><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div></div>';
+    }
+    const sc = getScore(m.home, m.away);
+    const live = sc && (sc.status==='IN_PLAY'||sc.status==='PAUSED');
+    const done = sc && sc.status==='FINISHED';
+    let hWon=false,aWon=false,hLost=false,aLost=false;
+    if (done && sc.home!=null && sc.away!=null) {
+      if (sc.home>sc.away){hWon=true;aLost=true;}
+      else if (sc.away>sc.home){aWon=true;hLost=true;}
+    }
+    const cls = 'bracket-match' + (live?' live':'') + (done?' done':'');
+    return '<div class="' + cls + '">' +
+      teamCell(m.home, sc?sc.home:null, hWon, hLost) +
+      '<div class="bm-sep"></div>' +
+      teamCell(m.away, sc?sc.away:null, aWon, aLost) +
+      '<div class="bm-meta">' + localDay(m.utc) + (live?' · LIVE':done?' · FT':'') + '</div>' +
+    '</div>';
   };
 
   let html = '<div class="bracket">';
-  rounds.forEach(r => {
+  ROUNDS.forEach(r => {
     const matches = byRound[r.key];
     html += '<div class="bracket-round' + (r.key==='Final'?' bracket-final':'') + '">';
     html += '<div class="bracket-round-title">' + r.title + '</div>';
-    if (!matches.length) {
-      html += '<div class="bracket-match"><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div><div class="bm-sep"></div><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div></div>';
-    } else {
-      matches.forEach(m => {
-        const sc = getScore(m.home, m.away);
-        const live = sc && (sc.status==='IN_PLAY'||sc.status==='PAUSED');
-        const done = sc && sc.status==='FINISHED';
-        let hWon=false,aWon=false,hLost=false,aLost=false;
-        if (done && sc.home!=null && sc.away!=null) {
-          if (sc.home>sc.away){hWon=true;aLost=true;}
-          else if (sc.away>sc.home){aWon=true;hLost=true;}
-        }
-        const cls = 'bracket-match' + (live?' live':'') + (done?' done':'');
-        html += '<div class="' + cls + '">' +
-          teamCell(m.home, sc?sc.home:null, hWon, hLost) +
-          '<div class="bm-sep"></div>' +
-          teamCell(m.away, sc?sc.away:null, aWon, aLost) +
-          '<div class="bm-meta">' + localDay(m.utc) + (live?' · LIVE':done?' · FT':'') + '</div>' +
-        '</div>';
-      });
+    // Always render exactly r.slots boxes; fill from data where present
+    for (let i = 0; i < r.slots; i++) {
+      html += matchBox(matches[i] || null);
     }
     html += '</div>';
   });
