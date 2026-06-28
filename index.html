@@ -1139,69 +1139,109 @@ const FIFA_RANKINGS = [
   {r:87,n:'Curaçao',f:'🇨🇼',p:1265.00,c:0},
 ];
 
+// Fixed knockout scaffold (FIFA 2026): dates + venues. Teams/scores overlaid from ESPN.
+const KO_SCAFFOLD = {
+  R32: [
+    {utc:'2026-06-29T19:00:00Z',venue:'Los Angeles'},
+    {utc:'2026-06-29T23:00:00Z',venue:'Boston'},
+    {utc:'2026-06-30T19:00:00Z',venue:'Houston'},
+    {utc:'2026-06-30T23:00:00Z',venue:'Dallas'},
+    {utc:'2026-07-01T19:00:00Z',venue:'Monterrey'},
+    {utc:'2026-07-01T23:00:00Z',venue:'Mexico City'},
+    {utc:'2026-07-02T19:00:00Z',venue:'Atlanta'},
+    {utc:'2026-07-02T23:00:00Z',venue:'Vancouver'},
+    {utc:'2026-07-03T19:00:00Z',venue:'Seattle'},
+    {utc:'2026-07-03T23:00:00Z',venue:'San Francisco'},
+    {utc:'2026-07-04T19:00:00Z',venue:'New York/NJ'},
+    {utc:'2026-07-04T23:00:00Z',venue:'Philadelphia'},
+    {utc:'2026-07-05T19:00:00Z',venue:'Miami'},
+    {utc:'2026-07-05T23:00:00Z',venue:'Kansas City'},
+    {utc:'2026-07-06T19:00:00Z',venue:'Toronto'},
+    {utc:'2026-07-06T23:00:00Z',venue:'Guadalajara'},
+  ],
+  R16: [
+    {utc:'2026-07-04T19:00:00Z',venue:'Philadelphia'},
+    {utc:'2026-07-05T19:00:00Z',venue:'Houston'},
+    {utc:'2026-07-06T19:00:00Z',venue:'Dallas'},
+    {utc:'2026-07-07T19:00:00Z',venue:'Seattle'},
+    {utc:'2026-07-07T23:00:00Z',venue:'Atlanta'},
+    {utc:'2026-07-08T19:00:00Z',venue:'Vancouver'},
+    {utc:'2026-07-08T23:00:00Z',venue:'Los Angeles'},
+    {utc:'2026-07-09T19:00:00Z',venue:'Boston'},
+  ],
+  QF: [
+    {utc:'2026-07-10T19:00:00Z',venue:'Los Angeles'},
+    {utc:'2026-07-11T19:00:00Z',venue:'Boston'},
+    {utc:'2026-07-11T23:00:00Z',venue:'Kansas City'},
+    {utc:'2026-07-12T19:00:00Z',venue:'Miami'},
+  ],
+  SF: [
+    {utc:'2026-07-14T19:00:00Z',venue:'Dallas'},
+    {utc:'2026-07-15T19:00:00Z',venue:'Atlanta'},
+  ],
+  Final: [
+    {utc:'2026-07-19T19:00:00Z',venue:'MetLife Stadium, NJ'},
+  ],
+};
+
 function renderBracket(){
   const el = document.getElementById('bracket-list');
-  // Fixed bracket scaffold: correct slot counts per round
   const ROUNDS = [
-    {key:'R32', title:'Round of 32', slots:16},
-    {key:'R16', title:'Round of 16', slots:8},
-    {key:'QF',  title:'Quarterfinals', slots:4},
-    {key:'SF',  title:'Semifinals', slots:2},
-    {key:'Final', title:'Final', slots:1},
+    {key:'R32', title:'Round of 32'},
+    {key:'R16', title:'Round of 16'},
+    {key:'QF',  title:'Quarterfinals'},
+    {key:'SF',  title:'Semifinals'},
+    {key:'Final', title:'Final'},
   ];
-  // Pull knockout fixtures from the live source, grouped by round
+  // Live knockout fixtures from ESPN, grouped by round, sorted by date
   const src = (espnFixtures && espnFixtures.length >= 40) ? espnFixtures : MATCHES;
-  const byRound = {R32:[],R16:[],QF:[],SF:[],Final:[]};
-  src.forEach(m => {
-    if (byRound[m.group]) byRound[m.group].push(m);
-  });
-  Object.keys(byRound).forEach(k => byRound[k].sort((a,b)=> new Date(a.utc)-new Date(b.utc)));
+  const espnByRound = {R32:[],R16:[],QF:[],SF:[],Final:[]};
+  src.forEach(m => { if (espnByRound[m.group]) espnByRound[m.group].push(m); });
+  Object.keys(espnByRound).forEach(k => espnByRound[k].sort((a,b)=> new Date(a.utc)-new Date(b.utc)));
 
   const teamCell = (raw, score, won, lost) => {
-    const isTBD = (raw === 'TBD' || !raw);
+    const isTBD = (!raw || raw === 'TBD');
     const nm = isTBD ? '<span style="color:var(--text3);">TBD</span>'
       : '<span class="flag">' + teamFlag(raw) + '</span>' + teamName(raw);
     const cls = 'bm-team' + (won ? ' win' : '') + (lost ? ' lose' : '');
-    const sc = (score !== null && score !== undefined) ? score : '';
+    const sc = (score !== null && score !== undefined && score !== '') ? score : '';
     return '<div class="' + cls + '"><span class="nm">' + nm + '</span><span class="sc">' + sc + '</span></div>';
   };
 
-  const matchBox = (m) => {
-    if (!m) {
-      return '<div class="bracket-match"><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div><div class="bm-sep"></div><div class="bm-team"><span class="nm" style="color:var(--text3);">TBD</span></div></div>';
+  // Build a box from a scaffold slot + optional ESPN game
+  const box = (slot, game) => {
+    let homeRaw='TBD', awayRaw='TBD', sc=null, live=false, done=false, when, chan='';
+    const utc = game ? game.utc : slot.utc;
+    if (game) {
+      homeRaw = game.home; awayRaw = game.away;
+      sc = getScore(game.home, game.away);
+      live = sc && (sc.status==='IN_PLAY'||sc.status==='PAUSED');
+      done = sc && sc.status==='FINISHED';
+      const chans = resolveChannels(game);
+      chan = chans.find(c=>c==='FOX'||c==='FS1') || chans[0] || '';
     }
-    const sc = getScore(m.home, m.away);
-    const live = sc && (sc.status==='IN_PLAY'||sc.status==='PAUSED');
-    const done = sc && sc.status==='FINISHED';
     let hWon=false,aWon=false,hLost=false,aLost=false;
-    if (done && sc.home!=null && sc.away!=null) {
-      if (sc.home>sc.away){hWon=true;aLost=true;}
-      else if (sc.away>sc.home){aWon=true;hLost=true;}
+    if (done && sc && sc.home!=null && sc.away!=null) {
+      if (sc.home>sc.away){hWon=true;aLost=true;} else if (sc.away>sc.home){aWon=true;hLost=true;}
     }
+    when = localDay(utc) + ' · ' + localTime(utc);
+    const meta = when + (chan?' · '+chan:'') + (live?' · LIVE':done?' · FT':'');
     const cls = 'bracket-match' + (live?' live':'') + (done?' done':'');
     return '<div class="' + cls + '">' +
-      teamCell(m.home, sc?sc.home:null, hWon, hLost) +
+      teamCell(homeRaw, sc?sc.home:null, hWon, hLost) +
       '<div class="bm-sep"></div>' +
-      teamCell(m.away, sc?sc.away:null, aWon, aLost) +
-      '<div class="bm-meta">' + (function(){
-        const chans = resolveChannels(m);
-        const eng = chans.find(c => c==='FOX' || c==='FS1') || chans[0] || '';
-        const when = localDay(m.utc) + ' · ' + localTime(m.utc);
-        const status = live ? ' · LIVE' : (done ? ' · FT' : '');
-        return when + (eng ? ' · ' + eng : '') + status;
-      })() + '</div>' +
+      teamCell(awayRaw, sc?sc.away:null, aWon, aLost) +
+      '<div class="bm-meta">' + meta + '</div>' +
     '</div>';
   };
 
   let html = '<div class="bracket">';
   ROUNDS.forEach(r => {
-    const matches = byRound[r.key];
+    const slots = KO_SCAFFOLD[r.key] || [];
+    const games = espnByRound[r.key] || [];
     html += '<div class="bracket-round' + (r.key==='Final'?' bracket-final':'') + '">';
     html += '<div class="bracket-round-title">' + r.title + '</div>';
-    // Always render exactly r.slots boxes; fill from data where present
-    for (let i = 0; i < r.slots; i++) {
-      html += matchBox(matches[i] || null);
-    }
+    slots.forEach((slot, i) => { html += box(slot, games[i] || null); });
     html += '</div>';
   });
   html += '</div>';
