@@ -300,10 +300,22 @@ async function fetchLiveScores() {
   if (Date.now() - lastFetch < 55000) return;
   lastFetch = Date.now();
   try {
-    const url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=120';
-    const res = await fetch(url);
-    if (!res.ok) { console.warn('ESPN returned', res.status); return; }
-    const data = await res.json();
+    // Fetch a tight window around 'now' (always fresh, never truncated) AND the
+    // full tournament range (for the complete fixture list). Merge both.
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = d => d.getUTCFullYear() + pad(d.getUTCMonth()+1) + pad(d.getUTCDate());
+    const now = new Date();
+    const from = new Date(now.getTime() - 3*24*60*60*1000);
+    const to   = new Date(now.getTime() + 4*24*60*60*1000);
+    const curUrl  = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=' + fmt(from) + '-' + fmt(to) + '&limit=80';
+    const fullUrl = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=300';
+    const [curR, fullR] = await Promise.allSettled([ fetch(curUrl).then(r=>r.json()), fetch(fullUrl).then(r=>r.json()) ]);
+    // Combine events, de-duplicating by event id (current window wins for freshest scores)
+    const evMap = {};
+    if (fullR.status === 'fulfilled') (fullR.value.events||[]).forEach(e => { evMap[e.id] = e; });
+    if (curR.status === 'fulfilled')  (curR.value.events||[]).forEach(e => { evMap[e.id] = e; }); // overwrite w/ fresh
+    const data = { events: Object.values(evMap) };
+    if (!data.events.length) { console.warn('ESPN returned no events'); return; }
     matchScores = {};
     matchBroadcasts = {};
     matchEspnIds = {};
