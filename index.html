@@ -431,7 +431,7 @@ async function fetchLiveScores() {
       const aName = hasAwayTeam ? ((awayInfo.display || aRawName) + (awayInfo.flag ? ' ' + awayInfo.flag : '')) : aRawName;
       const isUsa = /united states|usa/i.test(h.team.displayName + a.team.displayName);
       espnFixtures.push({ utc: ev.date, group: grp, home: hName, away: aName, venue: venueName, channels: [], usa: isUsa, _id: ev.id });
-      } catch(err) { console.warn('Skip event parse:', err && err.message); }
+
       if (h.team.shortDisplayName && a.team.shortDisplayName) {
         const hS = normalize(h.team.shortDisplayName);
         const aS = normalize(a.team.shortDisplayName);
@@ -446,6 +446,7 @@ async function fetchLiveScores() {
         matchScores[normalize(h.team.abbreviation) + '|' + normalize(a.team.abbreviation)] = rec;
         matchScores[normalize(a.team.abbreviation) + '|' + normalize(h.team.abbreviation)] = rec;
       }
+      } catch(err) { console.warn('Skip event parse:', err && err.message); }
     });
     console.log('ESPN scores loaded:', Object.keys(matchScores).length, 'keys');
   } catch(e) {
